@@ -1,13 +1,15 @@
-import { FeatureBento } from "@/components/marketing/FeatureBento";
+import { Audience } from "@/components/marketing/Audience";
+import { FaqTeaser } from "@/components/marketing/Faq";
+import { FeatureShowcases } from "@/components/marketing/FeatureShowcases";
 import { Hero } from "@/components/marketing/Hero";
-import { SocialProof } from "@/components/marketing/SocialProof";
 
 export default function HomePage() {
   return (
     <main>
       <Hero />
-      <FeatureBento />
-      <SocialProof />
+      <FeatureShowcases />
+      <Audience />
+      <FaqTeaser />
     </main>
   );
 }
