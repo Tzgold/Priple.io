@@ -132,30 +132,3 @@ export const mockMoves = [
     time: "1h",
   },
 ];
-
-export const testimonials = [
-  {
-    name: "Maya Chen",
-    role: "On-chain analyst",
-    quote:
-      "Priple is the first place I check before I even open a chart. The scorecard cuts the noise fast.",
-  },
-  {
-    name: "Jonah Reed",
-    role: "Prop desk",
-    quote:
-      "Wallet correlation alerts alone paid for the Pro seat. We catch leader-follower flows earlier now.",
-  },
-  {
-    name: "Aisha Okonkwo",
-    role: "Solo trader",
-    quote:
-      "Looks like a research tool, feels like a trading cockpit. Clean enough that I actually use it daily.",
-  },
-  {
-    name: "Leo Martins",
-    role: "Fund ops",
-    quote:
-      "Finally one screen for whales, screener, and social heat — without five tabs open.",
-  },
-];
