@@ -131,6 +131,73 @@ body {
   background-size: 14px 14px;
 }
 
+/* Dotted atmosphere only — no border (prevents double rings) */
+.priple-dot-stage {
+  position: relative;
+  isolation: isolate;
+  padding: 4px 0;
+  overflow: visible;
+}
+
+.priple-dot-stage::before {
+  content: "";
+  position: absolute;
+  inset: -10% -6% -6%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, 0.13) 0.65px, transparent 0.65px);
+  background-size: auto, 15px 15px;
+  mask-image: radial-gradient(ellipse 80% 65% at 50% 20%, black 20%, transparent 75%);
+  opacity: 0.85;
+}
+
+/* One clear border. Bigger cards. Soft depth — not a second ring. */
+.priple-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #121214;
+  padding: 1.5rem;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 640px) {
+  .priple-card {
+    border-radius: 22px;
+    padding: 1.75rem 1.75rem 1.5rem;
+  }
+}
+
+.priple-mock {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0a0a0c;
+  overflow: hidden;
+}
+
+.priple-feature-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #121214;
+  padding: 1.35rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+@media (min-width: 640px) {
+  .priple-feature-card {
+    padding: 1.5rem;
+  }
+}
+
+.priple-panel {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #0a0a0b;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
 .surface {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -182,4 +249,23 @@ body {
 }
 .delay-4 {
   animation-delay: 0.32s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-fade-up,
+  .animate-fade-in {
+    animation: none !important;
+  }
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+  .safe-px {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
 }
