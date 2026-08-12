@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
-import { Sun } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/Button";
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -11,41 +16,50 @@ function GitHubIcon({ className }: { className?: string }) {
 }
 
 const links = [
-  { href: "#features", label: "Features" },
-  { href: "#wallets", label: "Wallets" },
-  { href: "#screener", label: "Screener" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#", label: "Blog", soon: true },
+  { href: "/#features", label: "Features" },
+  { href: "/#wallets", label: "Wallets" },
+  { href: "/#screener", label: "Screener" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/about", label: "About" },
 ];
 
 export function SiteNav({ className }: { className?: string }) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   return (
-    <header className={cn("sticky top-0 z-50 px-4 pt-4", className)}>
-      <div className="mx-auto flex h-12 max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[#121214]/90 px-3 pl-5 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+    <header className={cn("sticky top-0 z-50 px-3 pt-3 sm:px-4 sm:pt-4", className)}>
+      <div className="mx-auto flex h-12 max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[#121214]/90 px-2 pl-4 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-3 sm:pl-5">
         <Link href="/" className="text-[15px] font-semibold tracking-tight text-white">
           Priple
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex">
-          {links.map((link) =>
-            link.soon ? (
-              <span
-                key={link.label}
-                className="cursor-default text-[13px] text-zinc-600"
-                title="Coming soon"
-              >
-                {link.label}
-              </span>
-            ) : (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-[13px] text-zinc-300 transition-colors hover:text-white"
-              >
-                {link.label}
-              </a>
-            ),
-          )}
+        <nav className="hidden items-center gap-5 lg:flex xl:gap-6">
+          {links.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              className={cn(
+                "text-[13px] transition-colors hover:text-white",
+                pathname === link.href || (link.href === "/about" && pathname === "/about")
+                  ? "text-white"
+                  : "text-zinc-300",
+              )}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="flex items-center gap-1">
@@ -53,20 +67,53 @@ export function SiteNav({ className }: { className?: string }) {
             href="https://github.com/Tzgold/Priple.io"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[13px] text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[13px] text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-2.5"
           >
             <GitHubIcon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Star</span>
+            <span className="hidden sm:inline">GitHub</span>
           </a>
+          <Button href="/login" variant="ghost" size="sm" className="hidden h-8 px-3 sm:inline-flex">
+            Log in
+          </Button>
+          <Button href="/signup" size="sm" className="hidden h-8 px-3.5 sm:inline-flex">
+            Get started
+          </Button>
           <button
             type="button"
-            aria-label="Theme"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white lg:hidden"
           >
-            <Sun className="h-3.5 w-3.5" />
+            {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
       </div>
+
+      {open ? (
+        <div className="mx-auto mt-2 max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#121214]/97 p-3 shadow-2xl backdrop-blur-xl lg:hidden">
+          <nav className="flex flex-col gap-0.5">
+            {links.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                onClick={() => setOpen(false)}
+                className="rounded-xl px-3 py-3 text-sm text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-3">
+            <Button href="/login" variant="secondary" className="w-full rounded-xl">
+              Log in
+            </Button>
+            <Button href="/signup" className="w-full rounded-xl">
+              Get started
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }
