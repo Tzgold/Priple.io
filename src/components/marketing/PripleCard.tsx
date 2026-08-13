@@ -21,15 +21,27 @@ export function PripleCard({
   description,
   children,
   className,
+  label,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
   className?: string;
+  label?: string;
 }) {
   return (
-    <article className={cn("priple-card flex h-full flex-col", className)}>
-      <h3 className="text-[1.35rem] font-semibold tracking-tight text-white sm:text-[1.5rem]">
+    <article
+      className={cn(
+        "priple-card relative flex h-full min-h-[30rem] flex-col overflow-clip",
+        className,
+      )}
+    >
+      {label ? (
+        <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-600">
+          {label}
+        </p>
+      ) : null}
+      <h3 className="text-[1.35rem] font-semibold tracking-[-0.025em] text-white sm:text-[1.5rem]">
         {title}
       </h3>
       <p className="mt-3 max-w-md text-[14px] leading-6 text-zinc-400 sm:text-[15px] sm:leading-7">
@@ -48,7 +60,11 @@ export function MockSurface({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={cn("priple-mock", className)}>{children}</div>;
+  return (
+    <div className={cn("priple-mock scene-muted-grid", className)}>
+      {children}
+    </div>
+  );
 }
 
 /** Single outer shell for hero product mock — one border only. */
