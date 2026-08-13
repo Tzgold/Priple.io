@@ -16,20 +16,26 @@ function GitHubIcon({ className }: { className?: string }) {
 }
 
 const links = [
-  { href: "/#features", label: "Features" },
-  { href: "/#wallets", label: "Wallets" },
-  { href: "/#screener", label: "Screener" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/about", label: "About" },
+  { href: "/#smart-money", id: "smart-money", label: "Smart Money" },
+  { href: "/#alerts", id: "alerts", label: "Alerts" },
+  { href: "/#opportunity", id: "opportunity", label: "Score" },
+  { href: "/#flows", id: "flows", label: "Flows" },
+  { href: "/#narrative", id: "narrative", label: "Narratives" },
+  { href: "/#intelligence", id: "intelligence", label: "Intelligence" },
+  { href: "/#faq", id: "faq", label: "FAQ" },
 ];
 
 export function SiteNav({ className }: { className?: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [activeId, setActiveId] = useState("");
+  const [navPath, setNavPath] = useState(pathname);
 
-  useEffect(() => {
+  if (pathname !== navPath) {
+    setNavPath(pathname);
     setOpen(false);
-  }, [pathname]);
+    setActiveId("");
+  }
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -38,23 +44,47 @@ export function SiteNav({ className }: { className?: string }) {
     };
   }, [open]);
 
+  useEffect(() => {
+    if (pathname !== "/") {
+      return;
+    }
+
+    const sections = links
+      .map((link) => document.getElementById(link.id))
+      .filter((section): section is HTMLElement => section !== null);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visible) setActiveId(visible.target.id);
+      },
+      { rootMargin: "-20% 0px -65% 0px", threshold: [0, 0.2, 0.5] },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [pathname]);
+
   return (
     <header className={cn("sticky top-0 z-50 px-3 pt-3 sm:px-4 sm:pt-4", className)}>
-      <div className="mx-auto flex h-12 max-w-5xl items-center justify-between rounded-full border border-white/10 bg-[#121214]/90 px-2 pl-4 shadow-[0_8px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-3 sm:pl-5">
-        <Link href="/" className="text-[15px] font-semibold tracking-tight text-white">
+      <div className="relative mx-auto flex h-12 max-w-6xl items-center justify-between rounded-2xl border border-white/[0.12] bg-[#0c0c0e]/92 px-3 pl-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-3.5 sm:pl-5">
+        <Link href="/" className="text-[14px] font-semibold tracking-tight text-white">
           Priple
         </Link>
 
-        <nav className="hidden items-center gap-5 lg:flex xl:gap-6">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-5 lg:flex xl:gap-6">
           {links.map((link) => (
             <Link
               key={link.label}
               href={link.href}
               className={cn(
-                "text-[13px] transition-colors hover:text-white",
-                pathname === link.href || (link.href === "/about" && pathname === "/about")
+                "text-[13px] font-medium transition-colors hover:text-white",
+                pathname === "/" && activeId === link.id
                   ? "text-white"
-                  : "text-zinc-300",
+                  : "text-zinc-400",
               )}
             >
               {link.label}
@@ -62,20 +92,20 @@ export function SiteNav({ className }: { className?: string }) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <a
             href="https://github.com/Tzgold/Priple.io"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-[13px] text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-2.5"
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-400 transition-colors hover:text-white"
           >
             <GitHubIcon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">GitHub</span>
+            <span className="sr-only">GitHub</span>
           </a>
-          <Button href="/login" variant="ghost" size="sm" className="hidden h-8 px-3 sm:inline-flex">
+          <Button href="/login" variant="ghost" size="sm" className="hidden h-8 px-3 text-[13px] sm:inline-flex">
             Log in
           </Button>
-          <Button href="/signup" size="sm" className="hidden h-8 px-3.5 sm:inline-flex">
+          <Button href="/signup" size="sm" className="hidden h-8 px-3.5 text-[13px] sm:inline-flex">
             Get started
           </Button>
           <button
@@ -83,7 +113,7 @@ export function SiteNav({ className }: { className?: string }) {
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white lg:hidden"
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-300 transition-colors hover:text-white lg:hidden"
           >
             {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
@@ -91,24 +121,24 @@ export function SiteNav({ className }: { className?: string }) {
       </div>
 
       {open ? (
-        <div className="mx-auto mt-2 max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#121214]/97 p-3 shadow-2xl backdrop-blur-xl lg:hidden">
+        <div className="mx-auto mt-2 max-w-6xl overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0c0c0e]/96 p-3 shadow-2xl backdrop-blur-xl lg:hidden">
           <nav className="flex flex-col gap-0.5">
             {links.map((link) => (
               <Link
                 key={link.label}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="rounded-xl px-3 py-3 text-sm text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+                className="rounded-xl px-3 py-3 text-[13px] font-medium text-zinc-300 transition-colors hover:bg-white/[0.04] hover:text-white"
               >
                 {link.label}
               </Link>
             ))}
           </nav>
-          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-3">
-            <Button href="/login" variant="secondary" className="w-full rounded-xl">
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.1] pt-3">
+            <Button href="/login" variant="secondary" className="w-full">
               Log in
             </Button>
-            <Button href="/signup" className="w-full rounded-xl">
+            <Button href="/signup" className="w-full">
               Get started
             </Button>
           </div>

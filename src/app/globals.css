@@ -31,7 +31,7 @@
   --color-faint: var(--text-faint);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-instrument);
   --font-mono: var(--font-geist-mono);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
@@ -52,7 +52,7 @@ html {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -63,35 +63,162 @@ body {
   color: #fff;
 }
 
+/* Cinematic hero — grain, vignette, HUD frame */
+.hero-cinematic {
+  background: #050506;
+}
+
+.hero-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 58%,
+    rgba(5, 5, 6, 0.35) 100%
+  );
+}
+
+.crosshair {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.crosshair::before {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.crosshair::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.guide-vline,
+.guide-hline {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.guide-vline {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.guide-hline {
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.hero-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 55.5%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hero-split-cross {
+  left: 55.5%;
+}
+
+.hero-frame {
+  isolation: isolate;
+}
+
+.hud-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 2px;
+  background: rgba(8, 8, 10, 0.38);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 28px rgba(255, 255, 255, 0.05);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.hud-button:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 34px rgba(255, 255, 255, 0.08);
+}
+
+.hud-button-sm {
+  min-height: 34px;
+  padding: 0 0.9rem;
+  font-size: 12px;
+}
+
+.hud-tick {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-color: rgba(255, 255, 255, 0.82);
+}
+
+.hud-tick-tl {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+
+.hud-tick-tr {
+  top: -1px;
+  right: -1px;
+  border-top: 1px solid;
+  border-right: 1px solid;
+}
+
+.hud-tick-bl {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+}
+
+.hud-tick-br {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+}
+
 /* Atmospheric backgrounds */
 .bg-atmosphere {
   position: relative;
   isolation: isolate;
   background: var(--bg);
-}
-
-.bg-atmosphere::before {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 255, 255, 0.07), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(255, 255, 255, 0.03), transparent 50%),
-    radial-gradient(ellipse 50% 35% at 15% 60%, rgba(255, 255, 255, 0.025), transparent 45%);
-}
-
-.bg-atmosphere::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.35;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.11) 0.6px, transparent 0.6px);
-  background-size: 18px 18px;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 20%, black 10%, transparent 70%);
 }
 
 .bg-auth {
@@ -146,55 +273,100 @@ body {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
-    radial-gradient(rgba(255, 255, 255, 0.13) 0.65px, transparent 0.65px);
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, 0.1) 0.65px, transparent 0.65px);
   background-size: auto, 15px 15px;
   mask-image: radial-gradient(ellipse 80% 65% at 50% 20%, black 20%, transparent 75%);
-  opacity: 0.85;
+  opacity: 0.45;
 }
 
 /* One clear border. Bigger cards. Soft depth — not a second ring. */
 .priple-card {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #121214;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #111113;
   padding: 1.5rem;
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
 }
 
 @media (min-width: 640px) {
   .priple-card {
-    border-radius: 22px;
+    border-radius: 18px;
     padding: 1.75rem 1.75rem 1.5rem;
   }
 }
 
 .priple-mock {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #0a0a0c;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #0c0c0e;
   overflow: hidden;
 }
 
-.priple-feature-card {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #121214;
-  padding: 1.35rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+.scene-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.scene-card {
+  min-height: 32rem;
+}
+
+.scene-muted-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.scene-node-glow {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 45px rgba(0, 0, 0, 0.55),
+    0 0 42px rgba(255, 255, 255, 0.035);
+}
+
+@media (min-width: 1024px) {
+  .scene-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.priple-feature-card,
+.priple-dash-card {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #141416;
+  padding: 1.25rem 1.25rem 1.15rem;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+.priple-dash-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.priple-dash-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 @media (min-width: 640px) {
-  .priple-feature-card {
-    padding: 1.5rem;
+  .priple-feature-card,
+  .priple-dash-card {
+    padding: 1.4rem 1.4rem 1.25rem;
   }
 }
 
 .priple-panel {
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #0a0a0b;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.5);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0c0c0e;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
