@@ -1,70 +1,56 @@
-import { ArrowRight } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { HeroDashboardMock } from "@/components/marketing/HeroDashboardMock";
-
-const quickLinks = [
-  { href: "#features", label: "See Opportunity Score" },
-  { href: "#wallets", label: "Wallet tracking" },
-  { href: "#screener", label: "Token screener" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/about", label: "About Priple" },
-];
+import Image from "next/image";
+import { HeroGrid } from "@/components/marketing/CrossFrame";
+import { HudButton } from "@/components/marketing/HudButton";
 
 export function Hero() {
   return (
-    <>
-      <section className="relative mx-auto flex w-full max-w-3xl flex-col items-center px-4 pb-10 pt-14 text-center sm:px-6 sm:pb-12 sm:pt-24 md:pt-28">
-        <div className="animate-fade-up">
-          <Badge className="max-w-full px-2.5 sm:px-3">
-            <span className="text-zinc-400">Introducing</span>
-            <a
-              href="#features"
-              className="truncate text-white transition-colors hover:text-zinc-200"
-            >
-              Opportunity Score →
-            </a>
-          </Badge>
+    <section
+      id="overview"
+      className="hero-cinematic relative isolate -mt-[4.25rem] min-h-[100svh] scroll-mt-0 overflow-hidden"
+    >
+      <Image
+        src="/priple-hero-atmosphere.png"
+        alt=""
+        fill
+        preload
+        sizes="100vw"
+        className="object-cover object-[center_38%]"
+      />
+      <div className="hero-vignette" />
+
+      <div className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-[92rem] flex-col justify-end px-5 pb-10 pt-24 sm:px-10 sm:pb-14 md:px-16 md:pb-16">
+        <div className="hero-frame relative px-6 py-8 sm:px-10 sm:py-10 md:px-14 md:py-12">
+          <HeroGrid />
+
+          <div className="grid items-end gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)] lg:gap-24">
+            <h1 className="animate-fade-up max-w-3xl text-[2.35rem] font-semibold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl md:text-[3.6rem] md:leading-[1.04]">
+              Track smart money.
+              <br />
+              Connect the signals.
+            </h1>
+
+            <div className="animate-fade-up delay-2 max-w-lg lg:justify-self-end">
+              <p className="text-[15px] leading-7 text-zinc-200 sm:text-base">
+                Follow wallets and entities, catch buy/sell and cross-chain
+                activity, and understand every move through transparent
+                scoring, AI narratives, and market, social, and news context.
+              </p>
+              <div className="mt-6 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <HudButton href="#smart-money">Explore the product</HudButton>
+                <a
+                  href="/app"
+                  className="inline-flex items-center justify-center gap-1.5 text-[13px] font-medium text-white transition-colors hover:text-zinc-300"
+                >
+                  Open app shell
+                  <span aria-hidden className="text-zinc-400">
+                    ›
+                  </span>
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <p className="animate-fade-up delay-1 mt-7 text-xs font-medium tracking-[0.2em] text-zinc-500 uppercase sm:mt-8 sm:text-sm">
-          Priple
-        </p>
-
-        <h1 className="animate-fade-up delay-2 mt-3 text-balance text-[2rem] font-semibold leading-[1.12] tracking-tight text-white sm:mt-4 sm:text-5xl sm:leading-[1.08] md:text-[3.5rem]">
-          You want the signal,
-          <br className="hidden sm:block" /> not the ordeal.
-        </h1>
-
-        <p className="animate-fade-up delay-3 mt-5 max-w-xl text-pretty px-1 text-[14px] leading-7 text-zinc-400 sm:mt-6 sm:text-[15px] sm:text-base">
-          Wallet intelligence, market screener, and social heat — fused into one
-          decision surface for crypto traders who move on evidence, not noise.
-        </p>
-
-        <div className="animate-fade-up delay-4 mt-8 flex w-full max-w-md flex-col items-stretch gap-2.5 sm:mt-9 sm:max-w-none sm:flex-row sm:items-center sm:justify-center sm:gap-3">
-          <Button href="/signup" size="lg" className="w-full sm:w-auto">
-            Start free
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button href="/app" variant="secondary" size="lg" className="w-full sm:w-auto">
-            View live shell
-          </Button>
-        </div>
-
-        <div className="animate-fade-in delay-4 mt-7 flex max-w-xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[12px] text-zinc-500 sm:mt-8 sm:gap-x-5 sm:text-[13px]">
-          {quickLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="transition-colors hover:text-zinc-300"
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-      </section>
-
-      <HeroDashboardMock />
-    </>
+      </div>
+    </section>
   );
 }

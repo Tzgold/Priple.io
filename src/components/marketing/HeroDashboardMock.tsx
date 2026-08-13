@@ -1,4 +1,5 @@
 import { Bell, CandlestickChart, LayoutDashboard, Search, Wallet } from "lucide-react";
+import { CryptoIcon, type CryptoIconName } from "@/components/marketing/CryptoIcons";
 import { DotStage, PriplePanel } from "@/components/marketing/PripleCard";
 
 function ShellChrome({ children }: { children: React.ReactNode }) {
@@ -85,7 +86,7 @@ export function HeroDashboardMock() {
           <div className="absolute -right-1 top-8 z-20 hidden w-[220px] animate-fade-up delay-3 rounded-2xl border border-white/16 bg-[#121214] p-3 shadow-2xl lg:block xl:-right-4">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                Live alert
+                Mock alert
               </p>
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
             </div>
@@ -132,7 +133,7 @@ export function HeroDashboardMock() {
                     <p className="text-[11px] text-zinc-500">Intelligence snapshot · mock</p>
                   </div>
                   <span className="rounded-full border border-white/12 px-2 py-0.5 text-[10px] text-zinc-400">
-                    Risk-on bias
+                    Mock preview
                   </span>
                 </div>
 
@@ -165,20 +166,26 @@ export function HeroDashboardMock() {
                       <p className="text-[11px] font-medium text-white">Recent whale moves</p>
                     </div>
                     <ul className="divide-y divide-white/[0.04]">
-                      {[
-                        ["Wintermute Desk", "Bought $420k LINK", "4m"],
-                        ["Smart Money α", "Bridged $1.2M ETH → Base", "18m"],
-                        ["DeFi Accumulator", "Staked 2.4k ETH", "1h"],
-                      ].map(([wallet, move, time]) => (
+                    {[
+                        ["Wintermute Desk", "Bought $420k LINK", "4m", "link"],
+                        ["Smart Money α", "Bridged $1.2M ETH → Base", "18m", "eth"],
+                        ["Momentum Desk", "Sold $71k SOL", "1h", "sol"],
+                      ].map(([wallet, move, time, token]) => (
                         <li
                           key={wallet}
                           className="flex items-center justify-between gap-2 px-3 py-2.5"
                         >
-                          <div className="min-w-0">
-                            <p className="truncate text-[11px] font-medium text-white">
-                              {wallet}
-                            </p>
-                            <p className="truncate text-[10px] text-zinc-500">{move}</p>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <CryptoIcon
+                              name={token as CryptoIconName}
+                              size={19}
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate text-[11px] font-medium text-white">
+                                {wallet}
+                              </p>
+                              <p className="truncate text-[10px] text-zinc-500">{move}</p>
+                            </div>
                           </div>
                           <span className="shrink-0 text-[10px] text-zinc-600">{time}</span>
                         </li>
@@ -192,18 +199,19 @@ export function HeroDashboardMock() {
                     </div>
                     <ul className="divide-y divide-white/[0.04]">
                       {[
-                        ["LINK", "88", "+8.7%"],
-                        ["SOL", "84", "+5.1%"],
-                        ["ETH", "78", "+2.4%"],
-                      ].map(([sym, score, ch]) => (
+                        ["LINK", "88", "+8.7%", "link"],
+                        ["SOL", "84", "+5.1%", "sol"],
+                        ["ETH", "78", "+2.4%", "eth"],
+                      ].map(([sym, score, ch, token]) => (
                         <li
                           key={sym}
                           className="flex items-center justify-between px-3 py-2.5"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-[9px] font-semibold text-zinc-300">
-                              {sym.slice(0, 2)}
-                            </span>
+                            <CryptoIcon
+                              name={token as CryptoIconName}
+                              size={21}
+                            />
                             <span className="text-[11px] text-white">{sym}</span>
                           </div>
                           <div className="text-right">
