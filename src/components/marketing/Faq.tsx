@@ -1,35 +1,35 @@
 export const faqItems = [
   {
-    q: "Is Priple investment advice?",
-    a: "No. Priple is research software. Scores, alerts, and wallet narratives highlight where evidence is clustering — they are not buy or sell recommendations.",
+    q: "What does Priple actually do?",
+    a: "Six connected research surfaces: Smart Money wallet tracking, buy/sell and custom alerts, Opportunity Score, wallet correlation and cross-chain tracing, AI wallet narratives, and social/news overlays on coin analysis.",
   },
   {
-    q: "What does Opportunity Score mean?",
-    a: "A readable composite of on-chain flows, social heat, and market structure for a token or wallet cluster. Higher means more converging signals, not a predicted price.",
+    q: "Can I track any wallet, or only famous traders?",
+    a: "Any address. Save favorites, follow labeled desks, or monitor curated Smart Money cohorts. The same watchlist powers alerts, correlation, narratives, and coin analysis.",
   },
   {
-    q: "Do I need to connect a wallet?",
-    a: "No. You can track labeled entities and screen tokens without connecting. Optional connect later is for portfolio context, not required for core research.",
+    q: "How do custom alerts work?",
+    a: "Combine who moved, buy or sell, size, Opportunity Score, and social momentum. Deliver in-app, Telegram, or email. Alerts point you to analysis — they are not trade calls.",
   },
   {
-    q: "How is this different from an explorer or DEX chart?",
-    a: "Explorers show raw txs. Charts show price. Priple fuses labeled wallet moves, market context, and narrative spikes so correlations show up in one place.",
+    q: "What is Opportunity Score?",
+    a: "A readable composite of on-chain flows, social momentum, market structure, and risk. Higher means more converging evidence, not a predicted price.",
   },
   {
-    q: "Can I build my own alerts?",
-    a: "Yes. Rules can combine wallet size, Opportunity Score, and sentiment — not just candle pings. Full live wiring lands with the data layer.",
+    q: "What is wallet correlation and cross-chain tracing?",
+    a: "Priple flags when followed wallets start trading the same asset, then keeps the story intact if funds hop Ethereum → Base, Arbitrum, BNB Chain, or Solana.",
   },
   {
-    q: "Which chains are supported?",
-    a: "The product is multi-chain by design, starting with major EVM networks and expanding. The UI already speaks chain-aware wallets and bridge hops.",
+    q: "Are AI narratives just summaries?",
+    a: "They are briefings with supporting facts: net flow, protocols, overlap wallets, and a timestamped evidence trail. Every sentence is meant to be checkable.",
+  },
+  {
+    q: "Is this investment advice?",
+    a: "No. Priple is research software. Scores, alerts, and narratives highlight where evidence is clustering. They do not tell you to buy or sell.",
   },
   {
     q: "Is the marketing data live?",
-    a: "Mocks and the app shell use realistic sample data so you can evaluate the surface. Live ingestion is the next engineering phase.",
-  },
-  {
-    q: "Who is Priple for?",
-    a: "Solo traders, research desks, and anyone tired of stitching explorers, DEX screens, and social feeds to make one decision.",
+    a: "Landing-page scenes and the app shell use realistic mock data so you can evaluate the product surface. Live ingestion is the next engineering phase.",
   },
 ];
 
@@ -51,21 +51,20 @@ export function FaqList() {
   );
 }
 
-/** Compact “Before you ask” block for the bottom of the homepage. */
 export function FaqTeaser() {
   return (
-    <section className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 sm:pb-28">
+    <section id="faq" className="mx-auto max-w-3xl scroll-mt-24 px-4 pb-20 pt-8 sm:px-6 sm:pb-28">
       <header className="pb-8 sm:pb-10">
         <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
           Before you ask
         </h2>
         <p className="mt-3 max-w-xl text-[15px] leading-7 text-zinc-400">
-          The things people want to know before they treat Priple like another
-          signal spam feed.
+          Straight answers about all six Priple pillars — and what this product
+          is not.
         </p>
       </header>
       <div className="border-t border-white/[0.08]">
-        {faqItems.slice(0, 4).map((item) => (
+        {faqItems.slice(0, 5).map((item) => (
           <div key={item.q} className="border-b border-white/[0.08] py-8 sm:py-10">
             <h3 className="text-[1.15rem] font-semibold tracking-tight text-white sm:text-xl">
               {item.q}
@@ -75,7 +74,7 @@ export function FaqTeaser() {
         ))}
       </div>
       <p className="mt-8 text-sm text-zinc-500">
-        More answers on the{" "}
+        More on the{" "}
         <a href="/faq" className="text-zinc-300 underline-offset-4 hover:underline">
           full FAQ
         </a>

@@ -5,7 +5,7 @@ import { FaqList } from "@/components/marketing/Faq";
 export const metadata: Metadata = {
   title: "FAQ",
   description:
-    "Before you ask — answers about Priple, Opportunity Score, wallets, and alerts.",
+    "Before you ask — answers about Priple’s six pillars, Opportunity Score, alerts, narratives, and what this product is not.",
 };
 
 export default function FaqPage() {
@@ -16,8 +16,8 @@ export default function FaqPage() {
           Before you ask
         </h1>
         <p className="mt-4 max-w-xl text-[15px] leading-7 text-zinc-400 sm:text-base">
-          The things people want to know before they open Priple for the first
-          time.
+          The six Priple pillars, what the scores mean, and what this product
+          is not — before you follow your first wallet.
         </p>
       </header>
 
