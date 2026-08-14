@@ -130,12 +130,12 @@ export default function LoginPage() {
         <label className="block">
           <span className="flex items-center justify-between">
             <span className="font-mono text-[12px] font-semibold text-white">Password</span>
-            <a
-              href="#forgot"
+            <Link
+              href="/forgot-password"
               className="font-mono text-[11px] text-white underline underline-offset-2"
             >
               Forgot Password?
-            </a>
+            </Link>
           </span>
           <input
             name="password"

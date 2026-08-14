@@ -123,15 +123,13 @@ export default function SignupPage() {
               password,
               name,
               callbackURL: "/app",
-              fetchOptions: captchaToken
-                ? {
-                    headers: {
-                      "x-captcha-response": captchaToken,
-                    },
-                  }
-                : undefined,
             },
             {
+              headers: captchaToken
+                ? {
+                    "x-captcha-response": captchaToken,
+                  }
+                : undefined,
               onRequest: () => {
                 setPending(true);
               },
