@@ -1,4 +1,26 @@
-export const mockWallets = [
+export type TrackedWallet = {
+  id: string;
+  label: string;
+  address: string;
+  chain: string;
+  pnl30d: string;
+  lastMove: string;
+  score: number;
+  asset: string;
+  usd: string;
+  custom?: boolean;
+};
+
+export type AlertItem = {
+  id: string;
+  title: string;
+  detail: string;
+  time: string;
+  type: "signal" | "flow" | "social" | "score";
+  status: "Live" | "Confirmed" | "Watching";
+};
+
+export const mockWallets: TrackedWallet[] = [
   {
     id: "1",
     label: "Wintermute Desk",
@@ -7,6 +29,8 @@ export const mockWallets = [
     pnl30d: "+18.4%",
     lastMove: "Bought $420k $LINK",
     score: 86,
+    asset: "ETH",
+    usd: "$4.82M",
   },
   {
     id: "2",
@@ -16,6 +40,8 @@ export const mockWallets = [
     pnl30d: "+42.1%",
     lastMove: "Bridged $1.2M → Base",
     score: 91,
+    asset: "ETH",
+    usd: "$12.4M",
   },
   {
     id: "3",
@@ -25,15 +51,41 @@ export const mockWallets = [
     pnl30d: "+9.7%",
     lastMove: "Staked 2.4k $ETH",
     score: 74,
+    asset: "BNB",
+    usd: "$1.08M",
   },
   {
     id: "4",
+    label: "Jump Trading",
+    address: "0x4c11…ee90",
+    chain: "SOL",
+    pnl30d: "+21.6%",
+    lastMove: "Bought $890k $SOL",
+    score: 88,
+    asset: "SOL",
+    usd: "$6.31M",
+  },
+  {
+    id: "5",
+    label: "Base Builder",
+    address: "0x91d0…12af",
+    chain: "ETH",
+    pnl30d: "+14.2%",
+    lastMove: "Accumulated $ARB",
+    score: 79,
+    asset: "ARB",
+    usd: "$640k",
+  },
+  {
+    id: "6",
     label: "NFT Flipper 09",
     address: "0x9e22…bb17",
     chain: "ETH",
     pnl30d: "-3.2%",
     lastMove: "Sold 14 Punks",
     score: 61,
+    asset: "ETH",
+    usd: "$220k",
   },
 ];
 
@@ -45,6 +97,15 @@ export const mockTokens = [
     change24h: "+2.4%",
     volume: "$18.2B",
     score: 78,
+    positive: true,
+  },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    price: "$97,840",
+    change24h: "+1.1%",
+    volume: "$32.4B",
+    score: 72,
     positive: true,
   },
   {
@@ -63,6 +124,24 @@ export const mockTokens = [
     change24h: "+8.7%",
     volume: "$892M",
     score: 88,
+    positive: true,
+  },
+  {
+    symbol: "USDT",
+    name: "Tether",
+    price: "$1.00",
+    change24h: "+0.0%",
+    volume: "$61.2B",
+    score: 54,
+    positive: true,
+  },
+  {
+    symbol: "XRP",
+    name: "XRP",
+    price: "$2.18",
+    change24h: "+3.4%",
+    volume: "$3.1B",
+    score: 71,
     positive: true,
   },
   {
@@ -85,50 +164,110 @@ export const mockTokens = [
   },
 ];
 
-export const mockAlerts = [
+export const watchTokens = [
+  { symbol: "ETH", name: "Ethereum" },
+  { symbol: "BTC", name: "Bitcoin" },
+  { symbol: "USDT", name: "Tether" },
+  { symbol: "SOL", name: "Solana" },
+  { symbol: "LINK", name: "Chainlink" },
+  { symbol: "ARB", name: "Arbitrum" },
+  { symbol: "XRP", name: "XRP" },
+] as const;
+
+export const mockAlerts: AlertItem[] = [
   {
     id: "a1",
     title: "Whale accumulation",
     detail: "3 tracked wallets bought $LINK in the last 40m",
     time: "2m ago",
-    type: "signal" as const,
+    type: "signal",
+    status: "Live",
   },
   {
     id: "a2",
     title: "Cross-chain flow",
     detail: "Smart Money α bridged $1.2M ETH → Base",
     time: "18m ago",
-    type: "flow" as const,
+    type: "flow",
+    status: "Confirmed",
   },
   {
     id: "a3",
     title: "Sentiment spike",
     detail: "Social mentions for $SOL up 47% vs 24h avg",
     time: "41m ago",
-    type: "social" as const,
+    type: "social",
+    status: "Watching",
+  },
+  {
+    id: "a4",
+    title: "Opportunity threshold",
+    detail: "$LINK score crossed 85 with clustered buys",
+    time: "1h ago",
+    type: "score",
+    status: "Live",
   },
 ];
 
 export const mockMoves = [
   {
+    id: "m1",
     wallet: "Wintermute Desk",
     action: "Bought",
     amount: "$420k",
     asset: "LINK",
-    time: "4m",
+    usd: "$420,180",
+    time: "14:35",
+    date: "Today",
+    status: "Confirmed" as const,
+    type: "buy" as const,
   },
   {
+    id: "m2",
     wallet: "Smart Money α",
     action: "Bridged",
     amount: "$1.2M",
     asset: "ETH",
-    time: "18m",
+    usd: "$1,204,000",
+    time: "13:12",
+    date: "Today",
+    status: "Confirmed" as const,
+    type: "flow" as const,
   },
   {
+    id: "m3",
+    wallet: "Jump Trading",
+    action: "Alert fired",
+    amount: "$890k",
+    asset: "SOL",
+    usd: "$890,400",
+    time: "11:48",
+    date: "Today",
+    status: "Live" as const,
+    type: "alert" as const,
+  },
+  {
+    id: "m4",
     wallet: "DeFi Accumulator",
     action: "Staked",
     amount: "2.4k",
     asset: "ETH",
-    time: "1h",
+    usd: "$8,189,000",
+    time: "09:04",
+    date: "Today",
+    status: "Confirmed" as const,
+    type: "stake" as const,
+  },
+  {
+    id: "m5",
+    wallet: "Base Builder",
+    action: "Accumulated",
+    amount: "$186k",
+    asset: "ARB",
+    usd: "$186,220",
+    time: "22:17",
+    date: "Yesterday",
+    status: "Watching" as const,
+    type: "buy" as const,
   },
 ];
