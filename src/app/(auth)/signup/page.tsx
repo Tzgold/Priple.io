@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppleIcon, GoogleIcon } from "@/components/auth/AuthMark";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { AuthTurnstile } from "@/components/auth/AuthTurnstile";
 import { signIn, signUp } from "@/lib/auth-client";
 
 function SocialButton({
@@ -35,6 +36,8 @@ export default function SignupPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -83,12 +86,36 @@ export default function SignupPage() {
         onSubmit={async (event) => {
           event.preventDefault();
           setError(null);
-          setPending(true);
 
           const form = event.currentTarget;
-          const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+          const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
+          const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
           const password = (form.elements.namedItem("password") as HTMLInputElement).value;
-          const name = email.split("@")[0] || "User";
+          const confirmPassword = (
+            form.elements.namedItem("confirmPassword") as HTMLInputElement
+          ).value;
+
+          if (!name) {
+            setError("Enter your name.");
+            return;
+          }
+
+          if (password.length < 8) {
+            setError("Password must be at least 8 characters.");
+            return;
+          }
+
+          if (password !== confirmPassword) {
+            setError("Passwords do not match.");
+            return;
+          }
+
+          if (captchaRequired && !captchaToken) {
+            setError("Complete the captcha check before continuing.");
+            return;
+          }
+
+          setPending(true);
 
           await signUp.email(
             {
@@ -96,8 +123,18 @@ export default function SignupPage() {
               password,
               name,
               callbackURL: "/app",
+              fetchOptions: captchaToken
+                ? {
+                    headers: {
+                      "x-captcha-response": captchaToken,
+                    },
+                  }
+                : undefined,
             },
             {
+              onRequest: () => {
+                setPending(true);
+              },
               onSuccess: () => {
                 router.push("/app");
                 router.refresh();
@@ -105,6 +142,7 @@ export default function SignupPage() {
               onError: (ctx) => {
                 setError(ctx.error.message ?? "Sign up failed.");
                 setPending(false);
+                setCaptchaToken(null);
               },
             },
           );
@@ -115,6 +153,19 @@ export default function SignupPage() {
             {error}
           </p>
         ) : null}
+
+        <label className="block">
+          <span className="font-mono text-[12px] font-semibold text-white">Name</span>
+          <input
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            disabled={pending}
+            placeholder="Your name"
+            className="auth-input mt-2"
+          />
+        </label>
 
         <label className="block">
           <span className="font-mono text-[12px] font-semibold text-white">Email</span>
@@ -138,12 +189,39 @@ export default function SignupPage() {
             required
             minLength={8}
             disabled={pending}
-            placeholder="Enter your password"
+            placeholder="At least 8 characters"
             className="auth-input mt-2"
           />
         </label>
 
-        <button type="submit" className="auth-submit mt-2 disabled:opacity-60" disabled={pending}>
+        <label className="block">
+          <span className="font-mono text-[12px] font-semibold text-white">Confirm password</span>
+          <input
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            disabled={pending}
+            placeholder="Re-enter your password"
+            className="auth-input mt-2"
+          />
+        </label>
+
+        <AuthTurnstile
+          onToken={setCaptchaToken}
+          onExpire={() => setCaptchaToken(null)}
+          onError={() => {
+            setCaptchaToken(null);
+            setError("Captcha failed to load. Refresh and try again.");
+          }}
+        />
+
+        <button
+          type="submit"
+          className="auth-submit mt-2 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={pending || (captchaRequired && !captchaToken)}
+        >
           {pending ? "Creating account…" : "Create an Account"}
         </button>
       </form>

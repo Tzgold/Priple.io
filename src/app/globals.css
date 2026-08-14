@@ -376,6 +376,20 @@ h4 {
   background: #e8e8e8;
 }
 
+.auth-turnstile {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgb(255 255 255 / 0.02);
+  padding: 0.35rem 0.5rem;
+}
+
+.auth-turnstile iframe {
+  border-radius: 4px;
+}
+
 .dot-panel {
   background-color: var(--bg-card);
   background-image: radial-gradient(rgba(255, 255, 255, 0.06) 0.7px, transparent 0.7px);
