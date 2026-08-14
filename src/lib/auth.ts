@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth";
+import { captcha } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import Database from "better-sqlite3";
+import { Pool } from "pg";
 import path from "path";
 
 const dbPath = path.join(process.cwd(), "sqlite.db");
@@ -15,12 +17,47 @@ const google =
       }
     : {};
 
+const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+
+const authPlugins = [
+  ...(turnstileSecret
+    ? [
+        captcha({
+          provider: "cloudflare-turnstile",
+          secretKey: turnstileSecret,
+          endpoints: ["/sign-up/email"],
+        }),
+      ]
+    : []),
+  nextCookies(),
+];
+
+function createDatabase() {
+  const url = process.env.DATABASE_URL;
+
+  if (url) {
+    return new Pool({
+      connectionString: url,
+      ssl: url.includes("supabase") ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+
+  return new Database(dbPath);
+}
+
 export const auth = betterAuth({
-  database: new Database(dbPath),
+  database: createDatabase(),
   emailAndPassword: {
     enabled: true,
   },
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+      requireLocalEmailVerified: false,
+    },
+  },
   socialProviders: google,
   trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
-  plugins: [nextCookies()],
+  plugins: authPlugins,
 });
