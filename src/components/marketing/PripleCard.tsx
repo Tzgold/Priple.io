@@ -1,5 +1,20 @@
 import { cn } from "@/lib/cn";
 
+export type PetalCorner = "tl-br" | "tr-bl" | "bl-tr" | "br-tl";
+
+/**
+ * Screenshot border language:
+ * sharp 1px outer frame with dim quarter-circle corner fills.
+ */
+export function CardBorder() {
+  return (
+    <div className="priple-card-border" aria-hidden>
+      <span className="priple-card-corner priple-card-corner-primary" />
+      <span className="priple-card-corner priple-card-corner-secondary" />
+    </div>
+  );
+}
+
 /** Soft dotted atmosphere — no border (avoids double rings). */
 export function DotStage({
   children,
@@ -15,39 +30,44 @@ export function DotStage({
   );
 }
 
-/** Single large marketing card — one clear border, generous size. */
+/** Single large marketing card — screenshot border design. */
 export function PripleCard({
   title,
   description,
   children,
   className,
   label,
+  petal = "tl-br",
 }: {
   title: string;
-  description: string;
+  description?: string;
   children: React.ReactNode;
   className?: string;
   label?: string;
+  petal?: PetalCorner;
 }) {
   return (
     <article
-      className={cn(
-        "priple-card relative flex h-full min-h-[30rem] flex-col overflow-clip",
-        className,
-      )}
+      data-petal={petal}
+      className={cn("priple-card relative flex h-full min-h-[40rem] flex-col", className)}
     >
-      {label ? (
-        <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-600">
-          {label}
-        </p>
-      ) : null}
-      <h3 className="text-[1.35rem] font-semibold tracking-[-0.025em] text-white sm:text-[1.5rem]">
-        {title}
-      </h3>
-      <p className="mt-3 max-w-md text-[14px] leading-6 text-zinc-400 sm:text-[15px] sm:leading-7">
-        {description}
-      </p>
-      <div className="mt-6 min-h-0 flex-1">{children}</div>
+      <CardBorder />
+      <div className="priple-card-fill relative z-[1] flex min-h-0 flex-1 flex-col">
+        {label ? (
+          <p className="mb-3 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-600">
+            {label}
+          </p>
+        ) : null}
+        <h3 className="font-sans text-[1.35rem] font-semibold tracking-[-0.025em] text-white sm:text-[1.5rem]">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-3 max-w-lg font-mono text-[12px] leading-6 text-zinc-400 sm:text-[13px]">
+            {description}
+          </p>
+        ) : null}
+        <div className="mt-6 min-h-0 flex-1 overflow-hidden">{children}</div>
+      </div>
     </article>
   );
 }
