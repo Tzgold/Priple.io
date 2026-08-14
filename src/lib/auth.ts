@@ -4,6 +4,7 @@ import { nextCookies } from "better-auth/next-js";
 import Database from "better-sqlite3";
 import { Pool } from "pg";
 import path from "path";
+import { sendResetPasswordEmail } from "@/lib/email";
 
 const dbPath = path.join(process.cwd(), "sqlite.db");
 
@@ -25,7 +26,7 @@ const authPlugins = [
         captcha({
           provider: "cloudflare-turnstile",
           secretKey: turnstileSecret,
-          endpoints: ["/sign-up/email"],
+          endpoints: ["/sign-up/email", "/request-password-reset"],
         }),
       ]
     : []),
@@ -49,6 +50,13 @@ export const auth = betterAuth({
   database: createDatabase(),
   emailAndPassword: {
     enabled: true,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      await sendResetPasswordEmail({
+        to: user.email,
+        url,
+      });
+    },
   },
   account: {
     accountLinking: {

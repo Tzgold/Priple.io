@@ -9,7 +9,13 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (session && (pathname === "/login" || pathname === "/signup")) {
+  if (
+    session &&
+    (pathname === "/login" ||
+      pathname === "/signup" ||
+      pathname === "/forgot-password" ||
+      pathname === "/reset-password")
+  ) {
     return NextResponse.redirect(new URL("/app", request.url));
   }
 
@@ -21,5 +27,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup"],
+  matcher: ["/app/:path*", "/login", "/signup", "/forgot-password", "/reset-password"],
 };
