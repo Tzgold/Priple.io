@@ -1,7 +1,20 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { AppSidebar, AppTopBar } from "@/components/app/AppChrome";
+import { auth } from "@/lib/auth";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const user = session.user;
+
   return (
     <div className="flex min-h-screen bg-[#09090b] text-white">
       <div className="hidden md:flex">
@@ -23,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </div>
-        <AppTopBar />
+        <AppTopBar user={user} />
         <main className="flex-1 overflow-auto p-5 sm:p-6">{children}</main>
       </div>
     </div>
