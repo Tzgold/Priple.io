@@ -1,33 +1,74 @@
-import { PageHeader } from "@/components/app/AppChrome";
-import { mockTokens } from "@/lib/mock/data";
+"use client";
 
-export default function ScreenerPage() {
+import { Suspense, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PageHeader } from "@/components/app/DashboardShell";
+import { TokenMark } from "@/components/app/TokenMark";
+import { useDesk, type ScreenerFilter } from "@/lib/app-store";
+import { cn } from "@/lib/cn";
+
+const filters: ScreenerFilter[] = ["All", "Trending", "Whales buying", "Social spike"];
+
+function ScreenerBoard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { tokens } = useDesk();
+  const token = searchParams.get("token");
+  const filter = (searchParams.get("filter") as ScreenerFilter) || "All";
+
+  const rows = useMemo(() => {
+    let list = tokens;
+    if (token) list = list.filter((item) => item.symbol === token);
+    if (filter === "Trending") list = list.filter((item) => item.score >= 75);
+    if (filter === "Whales buying") list = list.filter((item) => item.positive && item.score >= 70);
+    if (filter === "Social spike") list = list.filter((item) => ["SOL", "LINK", "XRP"].includes(item.symbol));
+    return list;
+  }, [tokens, token, filter]);
+
+  function setFilter(next: ScreenerFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "All") params.delete("filter");
+    else params.set("filter", next);
+    router.push(`/app/screener?${params.toString()}`);
+  }
+
   return (
     <div>
       <PageHeader
         title="Screener"
-        description="Tokens ranked by Opportunity Score — mock feed for the shell."
+        description={token ? `Focused on ${token}.` : "Tokens ranked by Opportunity Score."}
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {["All", "Trending", "Whales buying", "Social spike"].map((filter, i) => (
+        {filters.map((item) => (
           <button
-            key={filter}
+            key={item}
             type="button"
-            className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
-              i === 0
+            onClick={() => setFilter(item)}
+            className={cn(
+              "rounded-full border px-3 py-1.5 font-mono text-[11px] transition-colors",
+              filter === item
                 ? "border-white/20 bg-white text-[#09090b]"
-                : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
-            }`}
+                : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white",
+            )}
           >
-            {filter}
+            {item}
           </button>
         ))}
+        {token ? (
+          <button
+            type="button"
+            onClick={() => router.push("/app/screener")}
+            className="rounded-full border border-teal-400/30 px-3 py-1.5 font-mono text-[11px] text-teal-300"
+          >
+            Clear {token}
+          </button>
+        ) : null}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#141416]">
+      <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-black/30">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-white/[0.06] text-xs text-zinc-500">
+          <thead className="border-b border-white/[0.06] font-mono text-[11px] uppercase tracking-[0.12em] text-zinc-500">
             <tr>
               <th className="px-4 py-3 font-medium">Token</th>
               <th className="px-4 py-3 font-medium">Price</th>
@@ -37,39 +78,44 @@ export default function ScreenerPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.05]">
-            {mockTokens.map((t) => (
-              <tr key={t.symbol} className="hover:bg-white/[0.02]">
+            {rows.map((item) => (
+              <tr
+                key={item.symbol}
+                className={cn(
+                  "cursor-pointer hover:bg-white/[0.02]",
+                  token === item.symbol && "bg-white/[0.04]",
+                )}
+                onClick={() => router.push(`/app/screener?token=${item.symbol}`)}
+              >
                 <td className="px-4 py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#1a1a1d] text-[10px] font-semibold text-zinc-300">
-                      {t.symbol.slice(0, 2)}
-                    </div>
+                    <TokenMark symbol={item.symbol} size={28} />
                     <div>
-                      <p className="font-medium text-white">{t.symbol}</p>
-                      <p className="text-xs text-zinc-500">{t.name}</p>
+                      <p className="font-medium text-white">{item.symbol}</p>
+                      <p className="font-mono text-[11px] text-zinc-500">{item.name}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3.5 text-zinc-300">{t.price}</td>
+                <td className="px-4 py-3.5 font-mono text-zinc-300">{item.price}</td>
                 <td
-                  className={`px-4 py-3.5 ${
-                    t.positive ? "text-emerald-400" : "text-rose-400"
+                  className={`px-4 py-3.5 font-mono ${
+                    item.positive ? "text-teal-400" : "text-rose-400"
                   }`}
                 >
-                  {t.change24h}
+                  {item.change24h}
                 </td>
-                <td className="hidden px-4 py-3.5 text-zinc-500 sm:table-cell">
-                  {t.volume}
+                <td className="hidden px-4 py-3.5 font-mono text-zinc-500 sm:table-cell">
+                  {item.volume}
                 </td>
                 <td className="px-4 py-3.5">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
                       <div
-                        className="h-full rounded-full bg-white"
-                        style={{ width: `${t.score}%` }}
+                        className="h-full rounded-full bg-teal-400"
+                        style={{ width: `${item.score}%` }}
                       />
                     </div>
-                    <span className="text-white">{t.score}</span>
+                    <span className="font-mono text-white">{item.score}</span>
                   </div>
                 </td>
               </tr>
@@ -78,5 +124,13 @@ export default function ScreenerPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function ScreenerPage() {
+  return (
+    <Suspense>
+      <ScreenerBoard />
+    </Suspense>
   );
 }
