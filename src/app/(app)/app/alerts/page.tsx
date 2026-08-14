@@ -47,12 +47,18 @@ export default function AlertsPage() {
               .value as AlertItem["type"];
             const wallet = (form.elements.namedItem("wallet") as HTMLSelectElement).value;
             const title = (form.elements.namedItem("title") as HTMLInputElement).value.trim();
-            addAlert({
-              type,
-              title: title || `${type} alert`,
-              detail: `Watching ${wallet} for ${type} activity.`,
-            });
-            setOpen(false);
+            void (async () => {
+              try {
+                await addAlert({
+                  type,
+                  title: title || `${type} alert`,
+                  detail: `Watching ${wallet} for ${type} activity.`,
+                });
+                setOpen(false);
+              } catch {
+                // Keep form open so the user can retry.
+              }
+            })();
           }}
         >
           <div className="grid gap-3 sm:grid-cols-3">

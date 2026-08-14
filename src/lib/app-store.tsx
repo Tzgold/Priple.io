@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { PERSONAL_PULSE_THRESHOLD } from "@/lib/curated-wallets";
 import {
   mockAlerts,
   mockMoves,
@@ -10,156 +11,230 @@ import {
   type TrackedWallet,
 } from "@/lib/mock/data";
 
-const STORAGE_KEY = "priple-desk-v1";
+const PREFS_KEY = "priple-desk-prefs-v1";
 
 export type WalletSort = "score" | "pnl" | "name";
 export type ScreenerFilter = "All" | "Trending" | "Whales buying" | "Social spike";
 
-type DeskState = {
-  extraWallets: TrackedWallet[];
-  extraAlerts: AlertItem[];
-  dismissedAlertIds: string[];
+type DeskPrefs = {
   sort: WalletSort;
   emailAlerts: boolean;
+  dismissedMockAlertIds: string[];
 };
 
-const defaults: DeskState = {
-  extraWallets: [],
-  extraAlerts: [],
-  dismissedAlertIds: [],
+const defaultPrefs: DeskPrefs = {
   sort: "score",
   emailAlerts: true,
+  dismissedMockAlertIds: [],
 };
 
 type DeskContextValue = {
   wallets: TrackedWallet[];
+  /** User-saved wallets only (not market demo desks). */
+  trackedWallets: TrackedWallet[];
+  marketWallets: TrackedWallet[];
+  personalMode: boolean;
+  trackedCount: number;
+  pulseThreshold: number;
   alerts: AlertItem[];
+  savedAlerts: AlertItem[];
   tokens: typeof mockTokens;
   moves: typeof mockMoves;
   sort: WalletSort;
   emailAlerts: boolean;
-  addWallet: (input: { label: string; address: string; chain: string }) => void;
-  removeWallet: (id: string) => void;
+  ready: boolean;
+  addWallet: (input: { label: string; address: string; chain: string }) => Promise<void>;
+  removeWallet: (id: string) => Promise<void>;
   setSort: (sort: WalletSort) => void;
-  addAlert: (input: { title: string; detail: string; type: AlertItem["type"] }) => void;
-  dismissAlert: (id: string) => void;
+  addAlert: (input: { title: string; detail: string; type: AlertItem["type"] }) => Promise<void>;
+  dismissAlert: (id: string) => Promise<void>;
   setEmailAlerts: (value: boolean) => void;
+  refreshAlerts: () => Promise<void>;
 };
 
 const DeskContext = createContext<DeskContextValue | null>(null);
 
-function shortAddress(address: string) {
-  const value = address.trim();
-  if (value.startsWith("0x") && value.length > 12) {
-    return `${value.slice(0, 6)}…${value.slice(-4)}`;
-  }
-  if (value.length > 12) return `${value.slice(0, 4)}…${value.slice(-4)}`;
-  return value;
-}
-
-function chainAsset(chain: string) {
-  if (chain === "SOL") return "SOL";
-  if (chain === "BNB") return "BNB";
-  if (chain === "ARB") return "ARB";
-  return "ETH";
-}
-
 export function DeskProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<DeskState>(defaults);
+  const [prefs, setPrefs] = useState<DeskPrefs>(defaultPrefs);
+  const [savedWallets, setSavedWallets] = useState<TrackedWallet[]>([]);
+  const [savedAlerts, setSavedAlerts] = useState<AlertItem[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(PREFS_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as Partial<DeskState>;
-        setState({ ...defaults, ...parsed });
+        const parsed = JSON.parse(raw) as Partial<DeskPrefs>;
+        setPrefs({ ...defaultPrefs, ...parsed });
       }
     } catch {
-      setState(defaults);
+      setPrefs(defaultPrefs);
     }
-    setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state, ready]);
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  }, [prefs, ready]);
 
-  const wallets = useMemo(() => {
-    const list = [...mockWallets, ...state.extraWallets];
-    return [...list].sort((a, b) => {
-      if (state.sort === "name") return a.label.localeCompare(b.label);
-      if (state.sort === "pnl") return (parseFloat(b.pnl30d) || 0) - (parseFloat(a.pnl30d) || 0);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [walletsRes, alertsRes] = await Promise.all([
+          fetch("/api/wallets", { credentials: "include" }),
+          fetch("/api/alerts", { credentials: "include" }),
+        ]);
+
+        if (!cancelled && walletsRes.ok) {
+          const data = (await walletsRes.json()) as { wallets: TrackedWallet[] };
+          setSavedWallets(data.wallets ?? []);
+        }
+
+        if (!cancelled && alertsRes.ok) {
+          const data = (await alertsRes.json()) as { alerts: AlertItem[] };
+          setSavedAlerts(data.alerts ?? []);
+        }
+      } catch {
+        // Keep mock desk usable offline; saved rows stay empty until next load.
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sortWallets = (list: TrackedWallet[]) =>
+    [...list].sort((a, b) => {
+      if (prefs.sort === "name") return a.label.localeCompare(b.label);
+      if (prefs.sort === "pnl") return (parseFloat(b.pnl30d) || 0) - (parseFloat(a.pnl30d) || 0);
       return b.score - a.score;
     });
-  }, [state.extraWallets, state.sort]);
+
+  const trackedWallets = useMemo(() => sortWallets(savedWallets), [savedWallets, prefs.sort]);
+  const marketWallets = useMemo(() => sortWallets(mockWallets), [prefs.sort]);
+  const personalMode = savedWallets.length >= PERSONAL_PULSE_THRESHOLD;
+
+  const wallets = useMemo(() => {
+    if (personalMode) return trackedWallets;
+    return sortWallets([...savedWallets, ...mockWallets]);
+  }, [personalMode, trackedWallets, savedWallets, prefs.sort]);
 
   const alerts = useMemo(
     () =>
-      [...state.extraAlerts, ...mockAlerts].filter(
-        (alert) => !state.dismissedAlertIds.includes(alert.id),
+      [...savedAlerts, ...mockAlerts].filter(
+        (alert) => !prefs.dismissedMockAlertIds.includes(alert.id),
       ),
-    [state.extraAlerts, state.dismissedAlertIds],
+    [savedAlerts, prefs.dismissedMockAlertIds],
   );
+
+  const refreshAlerts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/alerts", { credentials: "include" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { alerts: AlertItem[] };
+      setSavedAlerts(data.alerts ?? []);
+    } catch {
+      // Keep current inbox.
+    }
+  }, []);
 
   const value = useMemo<DeskContextValue>(
     () => ({
       wallets,
+      trackedWallets,
+      marketWallets,
+      personalMode,
+      trackedCount: savedWallets.length,
+      pulseThreshold: PERSONAL_PULSE_THRESHOLD,
       alerts,
+      savedAlerts,
       tokens: mockTokens,
       moves: mockMoves,
-      sort: state.sort,
-      emailAlerts: state.emailAlerts,
-      addWallet: ({ label, address, chain }) => {
-        const wallet: TrackedWallet = {
-          id: `custom-${Date.now()}`,
-          label: label.trim() || "Custom wallet",
-          address: shortAddress(address),
-          chain,
-          pnl30d: "—",
-          lastMove: "Just added",
-          score: 50,
-          asset: chainAsset(chain),
-          usd: "—",
-          custom: true,
-        };
-        setState((current) => ({
+      sort: prefs.sort,
+      emailAlerts: prefs.emailAlerts,
+      ready,
+      addWallet: async ({ label, address, chain }) => {
+        const res = await fetch("/api/wallets", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label, address, chain }),
+        });
+        const data = (await res.json()) as { wallet?: TrackedWallet; error?: string };
+        if (!res.ok || !data.wallet) {
+          throw new Error(data.error ?? "Failed to add wallet");
+        }
+        setSavedWallets((current) => [data.wallet!, ...current.filter((w) => w.id !== data.wallet!.id)]);
+      },
+      removeWallet: async (id) => {
+        const isSaved = savedWallets.some((wallet) => wallet.id === id);
+        if (!isSaved) return;
+
+        const res = await fetch(`/api/wallets/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok && res.status !== 404) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Failed to remove wallet");
+        }
+        setSavedWallets((current) => current.filter((wallet) => wallet.id !== id));
+      },
+      setSort: (sort) => setPrefs((current) => ({ ...current, sort })),
+      addAlert: async ({ title, detail, type }) => {
+        const res = await fetch("/api/alerts", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, detail, type }),
+        });
+        const data = (await res.json()) as { alert?: AlertItem; error?: string };
+        if (!res.ok || !data.alert) {
+          throw new Error(data.error ?? "Failed to create alert");
+        }
+        setSavedAlerts((current) => [data.alert!, ...current]);
+      },
+      dismissAlert: async (id) => {
+        const isSaved = savedAlerts.some((alert) => alert.id === id);
+        if (isSaved) {
+          const res = await fetch(`/api/alerts/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+          if (!res.ok && res.status !== 404) {
+            const data = (await res.json()) as { error?: string };
+            throw new Error(data.error ?? "Failed to dismiss alert");
+          }
+          setSavedAlerts((current) => current.filter((alert) => alert.id !== id));
+          return;
+        }
+        setPrefs((current) => ({
           ...current,
-          extraWallets: [wallet, ...current.extraWallets],
+          dismissedMockAlertIds: [...current.dismissedMockAlertIds, id],
         }));
       },
-      removeWallet: (id) => {
-        setState((current) => ({
-          ...current,
-          extraWallets: current.extraWallets.filter((wallet) => wallet.id !== id),
-        }));
-      },
-      setSort: (sort) => setState((current) => ({ ...current, sort })),
-      addAlert: ({ title, detail, type }) => {
-        const alert: AlertItem = {
-          id: `custom-alert-${Date.now()}`,
-          title,
-          detail,
-          time: "now",
-          type,
-          status: "Live",
-        };
-        setState((current) => ({
-          ...current,
-          extraAlerts: [alert, ...current.extraAlerts],
-        }));
-      },
-      dismissAlert: (id) => {
-        setState((current) => ({
-          ...current,
-          dismissedAlertIds: [...current.dismissedAlertIds, id],
-          extraAlerts: current.extraAlerts.filter((alert) => alert.id !== id),
-        }));
-      },
-      setEmailAlerts: (emailAlerts) => setState((current) => ({ ...current, emailAlerts })),
+      setEmailAlerts: (emailAlerts) => setPrefs((current) => ({ ...current, emailAlerts })),
+      refreshAlerts,
     }),
-    [wallets, alerts, state.sort, state.emailAlerts],
+    [
+      wallets,
+      trackedWallets,
+      marketWallets,
+      personalMode,
+      alerts,
+      savedAlerts,
+      prefs.sort,
+      prefs.emailAlerts,
+      ready,
+      savedWallets,
+      refreshAlerts,
+    ],
   );
 
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;

@@ -37,21 +37,33 @@ const sorts = ["score", "pnl", "name"] as const;
 export function WatchlistPanel({ workspace }: { workspace: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { wallets, sort, setSort } = useDesk();
+  const { trackedWallets, marketWallets, personalMode, sort, setSort } = useDesk();
   const { openAddWallet } = useAddWallet();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const filtered = useMemo(() => {
+  const yourList = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return wallets;
-    return wallets.filter(
+    if (!q) return trackedWallets;
+    return trackedWallets.filter(
       (wallet) =>
         wallet.label.toLowerCase().includes(q) ||
         wallet.address.toLowerCase().includes(q) ||
         wallet.asset.toLowerCase().includes(q),
     );
-  }, [query, wallets]);
+  }, [query, trackedWallets]);
+
+  const marketList = useMemo(() => {
+    if (personalMode) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return marketWallets;
+    return marketWallets.filter(
+      (wallet) =>
+        wallet.label.toLowerCase().includes(q) ||
+        wallet.address.toLowerCase().includes(q) ||
+        wallet.asset.toLowerCase().includes(q),
+    );
+  }, [query, marketWallets, personalMode]);
 
   return (
     <aside className="flex w-full shrink-0 flex-col rounded-[22px] border border-white/[0.08] bg-[#0c0c0e] lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:w-[340px] xl:w-[360px]">
@@ -142,9 +154,9 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
 
       <div className="mt-5 flex items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <h2 className="font-sans text-[15px] font-semibold text-white">Tracked wallets</h2>
+          <h2 className="font-sans text-[15px] font-semibold text-white">Your wallets</h2>
           <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
-            {wallets.length}
+            {trackedWallets.length}
           </span>
         </div>
         <div className="flex items-center gap-1 text-zinc-500">
@@ -181,7 +193,7 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
       </div>
 
       <ul className="mt-2 flex-1 space-y-0.5 overflow-auto px-2 pb-4">
-        {filtered.map((wallet) => (
+        {yourList.map((wallet) => (
           <li key={wallet.id}>
             <Link
               href={`/app/wallets?id=${wallet.id}`}
@@ -191,7 +203,7 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1">
                   <p className="truncate text-[13px] font-medium text-white">{wallet.label}</p>
-                  <CopyButton value={wallet.address} />
+                  <CopyButton value={wallet.fullAddress || wallet.address} />
                 </div>
                 <p className="truncate font-mono text-[11px] text-zinc-500">{wallet.address}</p>
               </div>
@@ -213,10 +225,61 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
             </Link>
           </li>
         ))}
-        {filtered.length === 0 ? (
-          <li className="px-3 py-6 text-center font-mono text-[11px] text-zinc-600">
-            No wallets match that search.
+        {yourList.length === 0 ? (
+          <li className="px-3 py-5 text-center">
+            <p className="font-mono text-[11px] text-zinc-600">No wallets yet.</p>
+            <button
+              type="button"
+              onClick={openAddWallet}
+              className="mt-2 font-mono text-[11px] text-teal-400 hover:text-teal-300"
+            >
+              Track an address
+            </button>
           </li>
+        ) : null}
+
+        {marketList.length > 0 ? (
+          <>
+            <li className="px-2.5 pb-1 pt-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                Market desks
+              </p>
+            </li>
+            {marketList.map((wallet) => (
+              <li key={wallet.id}>
+                <Link
+                  href={`/app/wallets?id=${wallet.id}`}
+                  className="flex items-center gap-3 rounded-2xl px-2.5 py-2.5 transition-colors hover:bg-white/[0.035]"
+                >
+                  <TokenMark symbol={wallet.asset} size={34} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1">
+                      <p className="truncate text-[13px] font-medium text-zinc-200">
+                        {wallet.label}
+                      </p>
+                      <CopyButton value={wallet.address} />
+                    </div>
+                    <p className="truncate font-mono text-[11px] text-zinc-600">{wallet.address}</p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={cn(
+                        "font-mono text-[12px] font-medium",
+                        wallet.pnl30d.startsWith("+")
+                          ? "text-teal-400"
+                          : wallet.pnl30d.startsWith("-")
+                            ? "text-rose-400"
+                            : "text-zinc-400",
+                      )}
+                    >
+                      {wallet.pnl30d}
+                    </p>
+                    <p className="font-mono text-[11px] text-zinc-600">{wallet.usd}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </>
         ) : null}
       </ul>
     </aside>

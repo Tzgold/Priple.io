@@ -40,9 +40,15 @@ export function AddWalletModal({
               return;
             }
 
-            addWallet({ label, address, chain });
-            setError(null);
-            onClose();
+            void (async () => {
+              try {
+                setError(null);
+                await addWallet({ label, address, chain });
+                onClose();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to add wallet");
+              }
+            })();
           }}
         >
           {error ? (
