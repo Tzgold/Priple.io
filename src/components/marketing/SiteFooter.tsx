@@ -10,7 +10,7 @@ const columns = [
       { label: "Flows", href: "/#flows" },
       { label: "Narratives", href: "/#narrative" },
       { label: "Intelligence", href: "/#intelligence" },
-      { label: "Enter app", href: "/app" },
+      { label: "Enter app", href: "/login" },
     ],
   },
   {

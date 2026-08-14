@@ -27,7 +27,7 @@ export function Hero() {
           <div className="animate-fade-up delay-3 mt-8 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:gap-6">
             <HudButton href="#smart-money">Explore the product</HudButton>
             <a
-              href="/app"
+              href="/login"
               className="inline-flex items-center justify-center gap-1.5 font-mono text-[12px] text-white transition-colors hover:text-zinc-300"
             >
               Open app shell

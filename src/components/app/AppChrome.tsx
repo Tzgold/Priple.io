@@ -1,16 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   LayoutDashboard,
+  LogOut,
   Search,
   Settings,
   Wallet,
   CandlestickChart,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { signOut } from "@/lib/auth-client";
+
+type AppUser = {
+  name: string;
+  email: string;
+  image?: string | null;
+};
 
 const nav = [
   { href: "/app", label: "Overview", icon: LayoutDashboard },
@@ -86,7 +94,28 @@ export function AppSidebar() {
   );
 }
 
-export function AppTopBar() {
+export function AppTopBar({ user }: { user: AppUser }) {
+  const router = useRouter();
+  const initials =
+    user.name
+      ?.split(/\s+/)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() ||
+    user.email.slice(0, 2).toUpperCase();
+
+  async function handleSignOut() {
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+          router.refresh();
+        },
+      },
+    });
+  }
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-white/[0.07] bg-[#0c0c0e]/80 px-5 backdrop-blur-md">
       <div className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-white/10 bg-[#141416] px-3 text-sm text-zinc-500">
@@ -98,11 +127,30 @@ export function AppTopBar() {
       </div>
 
       <div className="ml-4 flex items-center gap-3">
+        <span className="hidden max-w-[140px] truncate font-mono text-[11px] text-zinc-500 sm:inline">
+          {user.email}
+        </span>
         <span className="hidden rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium text-zinc-300 sm:inline">
           Pro
         </span>
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-zinc-400 to-zinc-700 text-[11px] font-semibold text-white">
-          You
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+          title="Sign out"
+        >
+          <LogOut className="h-3.5 w-3.5" strokeWidth={1.5} />
+        </button>
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-zinc-400 to-zinc-700 text-[11px] font-semibold text-white"
+          title={user.name}
+        >
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.image} alt="" className="h-full w-full rounded-full object-cover" />
+          ) : (
+            initials
+          )}
         </div>
       </div>
     </header>
