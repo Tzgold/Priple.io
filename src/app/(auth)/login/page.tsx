@@ -2,18 +2,29 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { AppleIcon, GoogleIcon } from "@/components/auth/AuthMark";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { signIn } from "@/lib/auth-client";
 
 function SocialButton({
   children,
   label,
+  onClick,
+  disabled,
 }: {
   children: React.ReactNode;
   label: string;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <button type="button" className="auth-social">
+    <button
+      type="button"
+      className="auth-social disabled:cursor-not-allowed disabled:opacity-50"
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
       {label}
     </button>
@@ -22,6 +33,21 @@ function SocialButton({
 
 export default function LoginPage() {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    await signIn.social({
+      provider: "google",
+      callbackURL: "/app",
+      fetchOptions: {
+        onError: (ctx) => {
+          setError(ctx.error.message ?? "Google sign-in failed.");
+        },
+      },
+    });
+  }
 
   return (
     <AuthShell>
@@ -33,10 +59,10 @@ export default function LoginPage() {
       </p>
 
       <div className="mt-8 space-y-3">
-        <SocialButton label="Sign in with Google">
+        <SocialButton label="Sign in with Google" onClick={handleGoogleSignIn} disabled={pending}>
           <GoogleIcon />
         </SocialButton>
-        <SocialButton label="Sign in with Apple">
+        <SocialButton label="Sign in with Apple" disabled>
           <AppleIcon />
         </SocialButton>
       </div>
@@ -54,11 +80,40 @@ export default function LoginPage() {
 
       <form
         className="space-y-5"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          router.push("/app");
+          setError(null);
+          setPending(true);
+
+          const form = event.currentTarget;
+          const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+          const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+          await signIn.email(
+            {
+              email,
+              password,
+              callbackURL: "/app",
+            },
+            {
+              onSuccess: () => {
+                router.push("/app");
+                router.refresh();
+              },
+              onError: (ctx) => {
+                setError(ctx.error.message ?? "Sign in failed.");
+                setPending(false);
+              },
+            },
+          );
         }}
       >
+        {error ? (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300">
+            {error}
+          </p>
+        ) : null}
+
         <label className="block">
           <span className="font-mono text-[12px] font-semibold text-white">Email</span>
           <input
@@ -66,6 +121,7 @@ export default function LoginPage() {
             type="email"
             autoComplete="email"
             required
+            disabled={pending}
             placeholder="Enter your email"
             className="auth-input mt-2"
           />
@@ -86,13 +142,14 @@ export default function LoginPage() {
             type="password"
             autoComplete="current-password"
             required
+            disabled={pending}
             placeholder="Enter your password"
             className="auth-input mt-2"
           />
         </label>
 
-        <button type="submit" className="auth-submit mt-2">
-          Sign In
+        <button type="submit" className="auth-submit mt-2 disabled:opacity-60" disabled={pending}>
+          {pending ? "Signing in…" : "Sign In"}
         </button>
       </form>
 
