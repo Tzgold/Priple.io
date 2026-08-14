@@ -2,6 +2,7 @@ export type TrackedWallet = {
   id: string;
   label: string;
   address: string;
+  fullAddress?: string;
   chain: string;
   pnl30d: string;
   lastMove: string;
