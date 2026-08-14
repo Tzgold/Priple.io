@@ -14,7 +14,7 @@ const rules = [
 function RuleBuilder() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-      <div className="rounded-2xl border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
+      <div className="rounded-none border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-white">Alert rule</p>
@@ -36,7 +36,7 @@ function RuleBuilder() {
               </span>
               <button
                 type="button"
-                className="flex min-h-10 items-center justify-between rounded-xl border border-white/[0.09] bg-[#131315] px-3 text-left"
+                className="flex min-h-10 items-center justify-between rounded-none border border-white/[0.09] bg-[#131315] px-3 text-left"
               >
                 <span>
                   <span className="mr-2 text-[10px] text-zinc-600">
@@ -81,9 +81,9 @@ function RuleBuilder() {
         </div>
       </div>
 
-      <div className="flex flex-col justify-center rounded-2xl border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
+      <div className="flex flex-col justify-center rounded-none border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
         <SceneLabel className="self-start">Resulting notification</SceneLabel>
-        <div className="scene-node-glow mt-5 rounded-2xl border border-white/[0.12] bg-[#151517] p-4">
+        <div className="scene-node-glow mt-5 rounded-none border border-white/[0.12] bg-[#151517] p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/30">
@@ -111,7 +111,7 @@ function RuleBuilder() {
             ].map(([label, value]) => (
               <div
                 key={label}
-                className="rounded-lg border border-white/[0.07] bg-black/25 p-2"
+                className="rounded-none border border-white/[0.07] bg-black/25 p-2"
               >
                 <p className="text-[8px] uppercase tracking-wider text-zinc-600">
                   {label}
@@ -139,16 +139,17 @@ export function AlertsScene() {
   return (
     <ProductSection
       id="alerts"
-      eyebrow="02 · Buy, sell & custom alerts"
+      eyebrow="02 · Alerts"
       title="Build the alert you actually mean"
-      description="Combine who moved, what they did, transaction size, token score, and social momentum. Then deliver the notification where your research already happens."
+      description="Who moved, buy or sell, size, score, and social heat — delivered in-app, Telegram, or email."
     >
       <DotStage>
         <PripleCard
           label="Custom surveillance"
-          title="From a raw transaction to a useful decision prompt"
-          description="A price ping tells you what moved. A Priple alert tells you who moved it, whether other tracked wallets agree, and what the broader evidence looks like."
+          title="From a fill to a decision prompt"
+          description="Who moved, who else agrees, and what the score says."
           className="min-h-0"
+          petal="tr-bl"
         >
           <RuleBuilder />
         </PripleCard>

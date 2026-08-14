@@ -1,7 +1,7 @@
-import { Bell, Check, Plus, Radio } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { CryptoIcon, type CryptoIconName } from "../CryptoIcons";
 import { DotStage, PripleCard } from "../PripleCard";
-import { ProductSection, SceneLabel } from "../ProductSection";
+import { ProductSection } from "../ProductSection";
 
 const traders: Array<{
   name: string;
@@ -55,7 +55,7 @@ const traders: Array<{
 
 function TraderRows() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/[0.12] bg-[#09090b]">
+    <div className="overflow-hidden rounded-none border border-white/[0.12] bg-[#09090b]">
       <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
         <div>
           <p className="text-sm font-medium text-white">Trader watchlist</p>
@@ -150,46 +150,19 @@ export function SmartMoneyScene() {
   return (
     <ProductSection
       id="smart-money"
-      eyebrow="01 · Smart-money tracking"
-      title="Follow wallets and cohorts that consistently move first"
-      description="Track any address, save favorite traders, or monitor curated Smart Money cohorts. See performance context and the exact assets they buy, sell, or bridge."
+      eyebrow="01 · Smart money"
+      title="Follow the wallets that move first"
+      description="Any address, favorite traders, or curated cohorts — with buy/sell context."
     >
       <DotStage>
         <PripleCard
-          label="Wallet intelligence"
-          title="The traders you care about, in one watchlist"
-          description="Move beyond raw addresses. Priple combines labels, behavioral cohorts, realized performance, and recent activity so every wallet has context."
+          label="Watchlist"
+          title="The desks you track"
+          description="Labels, performance, and the last move — in one list."
           className="min-h-0"
+          petal="tl-br"
         >
           <TraderRows />
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-white/[0.12] bg-black/25 p-3">
-              <SceneLabel>Any address</SceneLabel>
-              <p className="mt-3 text-sm font-medium text-white">Paste and follow</p>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-600">
-                Ethereum, Base, Arbitrum, BNB Chain, and Solana-ready UI.
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/[0.12] bg-black/25 p-3">
-              <Radio className="h-4 w-4 text-zinc-400" />
-              <p className="mt-3 text-sm font-medium text-white">
-                Behavioral cohorts
-              </p>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-600">
-                Group wallets by win rate, timing, protocols, and recurring assets.
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/[0.12] bg-black/25 p-3">
-              <Bell className="h-4 w-4 text-zinc-400" />
-              <p className="mt-3 text-sm font-medium text-white">
-                Follow state travels
-              </p>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-600">
-                The same watchlist powers alerts, correlation, and daily briefs.
-              </p>
-            </div>
-          </div>
         </PripleCard>
       </DotStage>
     </ProductSection>

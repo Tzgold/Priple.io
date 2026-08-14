@@ -14,22 +14,23 @@ export function NarrativeScene() {
   return (
     <ProductSection
       id="narrative"
-      eyebrow="05 · AI wallet narratives"
-      title="Read the wallet story without reconstructing it transaction by transaction"
-      description="Priple turns normalized wallet activity into a concise briefing, while keeping the supporting facts visible so every sentence can be checked."
+      eyebrow="05 · Narratives"
+      title="Read the wallet without replaying every fill"
+      description="A briefing with the facts still attached."
     >
       <DotStage>
         <PripleCard
           label="Daily wallet brief"
-          title="Smart Money Alpha changed its behavior"
-          description="The narrative explains what happened, what was unusual, and which related wallets or assets deserve a closer look."
+          title="Smart Money Alpha changed behavior"
+          description="What happened, what was unusual, and where to look next."
           className="min-h-0"
+          petal="tl-br"
         >
           <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-2xl border border-white/[0.12] bg-[#09090b]">
+            <div className="rounded-none border border-white/[0.12] bg-[#09090b]">
               <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3 sm:px-5">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-[#151517]">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-none border border-white/10 bg-[#151517]">
                     <Bot className="h-4 w-4 text-zinc-300" />
                   </span>
                   <div>
@@ -56,7 +57,7 @@ export function NarrativeScene() {
                   and exchange deposits fell while self-custodied balances rose.
                 </p>
 
-                <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                <div className="mt-5 rounded-none border border-white/[0.07] bg-white/[0.025] p-3.5">
                   <div className="flex items-center gap-2">
                     <CryptoIcon name="link" size={20} />
                     <p className="text-[11px] font-medium text-white">
@@ -76,7 +77,7 @@ export function NarrativeScene() {
                 {facts.map((fact) => (
                   <div
                     key={fact.label}
-                    className="rounded-xl border border-white/[0.12] bg-[#09090b] p-3.5"
+                    className="rounded-none border border-white/[0.12] bg-[#09090b] p-3.5"
                   >
                     <p className="text-[9px] uppercase tracking-wider text-zinc-600">
                       {fact.label}
@@ -88,7 +89,7 @@ export function NarrativeScene() {
                 ))}
               </div>
 
-              <div className="flex-1 rounded-2xl border border-white/[0.12] bg-[#09090b] p-4">
+              <div className="flex-1 rounded-none border border-white/[0.12] bg-[#09090b] p-4">
                 <div className="flex items-center justify-between">
                   <SceneLabel>Evidence trail</SceneLabel>
                   <FileText className="h-4 w-4 text-zinc-600" />
@@ -115,7 +116,7 @@ export function NarrativeScene() {
                       key={event.time}
                       className="flex items-start gap-3 border-b border-white/[0.055] pb-3 last:border-0 last:pb-0"
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.12] bg-[#141416]">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-none border border-white/[0.12] bg-[#141416]">
                         <CryptoIcon name={event.icon} size={17} />
                       </span>
                       <div className="min-w-0">

@@ -5,7 +5,7 @@ import { ProductSection, SceneLabel } from "../ProductSection";
 
 function IntelligenceChart() {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/[0.12] bg-[#09090b] p-3 sm:p-4">
+    <div className="relative overflow-hidden rounded-none border border-white/[0.12] bg-[#09090b] p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <CryptoIcon name="link" size={28} />
@@ -88,7 +88,7 @@ function IntelligenceChart() {
         <div className="absolute left-[58%] top-16 rounded-full bg-rose-400 px-2 py-1 text-[8px] font-semibold text-[#16080b]">
           Exchange SELL
         </div>
-        <div className="absolute right-[9%] top-6 max-w-[150px] rounded-xl border border-white/12 bg-[#151517] p-2.5">
+        <div className="absolute right-[9%] top-6 max-w-[150px] rounded-none border border-white/12 bg-[#151517] p-2.5">
           <div className="flex items-center gap-1.5">
             <Newspaper className="h-3 w-3 text-zinc-400" />
             <p className="text-[8px] font-medium uppercase tracking-wider text-zinc-500">
@@ -120,22 +120,23 @@ export function CoinIntelligenceScene() {
   return (
     <ProductSection
       id="intelligence"
-      eyebrow="06 · Social, news & coin analysis"
-      title="Put wallet moves on the same timeline as price, social momentum, and news"
-      description="A transaction is more useful when you know what happened around it. Priple overlays off-chain events and token fundamentals on the same research surface."
+      eyebrow="06 · Intelligence"
+      title="Wallet moves on the same timeline as price and news"
+      description="Social spikes, headlines, liquidity, and Smart Money flow — together."
     >
       <DotStage>
         <PripleCard
           label="Mixed-signal context"
-          title="Understand the coin behind the wallet alert"
-          description="Open a token from any alert or wallet narrative and inspect price action, Smart Money flow, social acceleration, news events, liquidity, and concentration."
+          title="The coin behind the alert"
+          description="Price, flow, social heat, news, liquidity, concentration."
           className="min-h-0"
+          petal="tr-bl"
         >
           <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
             <IntelligenceChart />
 
             <div className="flex flex-col gap-3">
-              <div className="rounded-2xl border border-white/[0.12] bg-[#09090b] p-4">
+              <div className="rounded-none border border-white/[0.12] bg-[#09090b] p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-white">Coin analysis</p>
                   <SceneLabel>Mock</SceneLabel>
@@ -171,7 +172,7 @@ export function CoinIntelligenceScene() {
                     return (
                       <div
                         key={metric.label}
-                        className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-[#141416] p-3"
+                        className="flex items-center justify-between rounded-none border border-white/[0.07] bg-[#141416] p-3"
                       >
                         <div className="flex items-center gap-2.5">
                           <Icon className="h-3.5 w-3.5 text-zinc-500" />
@@ -188,7 +189,7 @@ export function CoinIntelligenceScene() {
                 </div>
               </div>
 
-              <div className="flex-1 rounded-2xl border border-white/[0.12] bg-[#09090b] p-4">
+              <div className="flex-1 rounded-none border border-white/[0.12] bg-[#09090b] p-4">
                 <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-600">
                   Narrative pulse
                 </p>

@@ -24,7 +24,7 @@ function WalletNode({
 }) {
   return (
     <div
-      className={`scene-node-glow absolute z-10 w-[132px] rounded-xl border border-white/[0.12] bg-[#151517] p-3 ${className}`}
+      className={`scene-node-glow absolute z-10 w-[132px] rounded-none border border-white/[0.12] bg-[#151517] p-3 ${className}`}
     >
       <p className="text-[11px] font-medium text-white">{label}</p>
       <p className="mt-1 font-mono text-[8px] text-zinc-600">{address}</p>
@@ -35,7 +35,7 @@ function WalletNode({
 
 function CorrelationGraph() {
   return (
-    <div className="relative min-h-[330px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[#09090b] p-4">
+    <div className="relative min-h-[330px] overflow-hidden rounded-none border border-white/[0.12] bg-[#09090b] p-4">
       <div className="absolute inset-0 scene-muted-grid opacity-75" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.05),transparent_40%)]" />
       <svg
@@ -111,7 +111,7 @@ function CorrelationGraph() {
 
 function CrossChainPath() {
   return (
-    <div className="rounded-2xl border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
+    <div className="rounded-none border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">Cross-chain trace</p>
@@ -125,8 +125,8 @@ function CrossChainPath() {
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         {chainPath.map((chain, index) => (
           <div key={chain.name} className="contents">
-            <div className="flex flex-1 items-center gap-3 rounded-xl border border-white/[0.12] bg-[#141416] p-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30">
+            <div className="flex flex-1 items-center gap-3 rounded-none border border-white/[0.12] bg-[#141416] p-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-white/10 bg-black/30">
                 <CryptoIcon name={chain.icon} size={24} />
               </span>
               <div>
@@ -149,7 +149,7 @@ function CrossChainPath() {
         ].map(([label, value]) => (
           <div
             key={label}
-            className="rounded-lg border border-white/[0.06] bg-black/25 px-3 py-2"
+            className="rounded-none border border-white/[0.06] bg-black/25 px-3 py-2"
           >
             <p className="text-[8px] uppercase tracking-wider text-zinc-600">
               {label}
@@ -166,23 +166,24 @@ export function FlowsScene() {
   return (
     <ProductSection
       id="flows"
-      eyebrow="04 · Correlation & cross-chain flows"
-      title="See when independent wallets start moving as a group"
-      description="Priple highlights wallet overlap, leader/follower patterns, and bridge paths so a collection of transactions becomes one understandable flow."
+      eyebrow="04 · Flows"
+      title="When wallets start moving together"
+      description="Overlap, leader/follower patterns, and bridge paths as one flow."
     >
       <DotStage>
         <PripleCard
           label="Relationship intelligence"
-          title="Three wallets. One asset. Then a move across chains."
-          description="Correlation reveals behavior that single-wallet feeds miss. Cross-chain tracing keeps the story intact after funds leave the original network."
+          title="Three wallets. One asset. Then a hop."
+          description="Correlation catches the cluster. Tracing keeps it across chains."
           className="min-h-0"
+          petal="br-tl"
         >
           <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <CorrelationGraph />
             <div className="flex flex-col gap-4">
               <CrossChainPath />
-              <div className="flex flex-1 items-start gap-3 rounded-2xl border border-white/[0.12] bg-black/25 p-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#151517]">
+              <div className="flex flex-1 items-start gap-3 rounded-none border border-white/[0.12] bg-black/25 p-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-white/10 bg-[#151517]">
                   <GitBranch className="h-4 w-4 text-zinc-400" />
                 </span>
                 <div>

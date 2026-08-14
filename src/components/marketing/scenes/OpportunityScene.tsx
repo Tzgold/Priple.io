@@ -76,18 +76,19 @@ export function OpportunityScene() {
     <ProductSection
       id="opportunity"
       eyebrow="03 · Opportunity Score"
-      title="A single score, with every reason visible"
-      description="Priple combines wallet flows, social momentum, market structure, and token risk into an interpretable score. You can always inspect the evidence behind it."
+      title="One score. Every reason visible."
+      description="On-chain, social, market, and risk — a composite you can inspect, not a prediction."
     >
       <DotStage>
         <PripleCard
           label="Transparent composite"
-          title="LINK is showing converging evidence"
-          description="The score organizes attention; it does not predict a price or issue a buy/sell recommendation."
+          title="LINK · converging evidence"
+          description="The score ranks attention. It does not tell you to buy."
           className="min-h-0"
+          petal="bl-tr"
         >
           <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.12] bg-[#09090b] p-5">
+            <div className="flex flex-col items-center justify-center rounded-none border border-white/[0.12] bg-[#09090b] p-5">
               <SceneLabel>Mock analysis · 24h</SceneLabel>
               <ScoreDial />
               <div className="grid w-full grid-cols-3 gap-2">
@@ -98,7 +99,7 @@ export function OpportunityScene() {
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="rounded-lg border border-white/[0.07] bg-black/25 p-2 text-center"
+                    className="rounded-none border border-white/[0.07] bg-black/25 p-2 text-center"
                   >
                     <p className="text-[8px] uppercase tracking-wider text-zinc-600">
                       {label}
@@ -111,7 +112,7 @@ export function OpportunityScene() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
+            <div className="rounded-none border border-white/[0.12] bg-[#09090b] p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-white">Score breakdown</p>
                 <span className="text-[10px] text-zinc-600">Updated 4m ago</span>
@@ -123,7 +124,7 @@ export function OpportunityScene() {
                     <div key={dimension.label}>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2.5">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.12] bg-[#141416]">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-none border border-white/[0.12] bg-[#141416]">
                             <Icon className="h-3.5 w-3.5 text-zinc-400" />
                           </span>
                           <div className="min-w-0">
@@ -149,7 +150,7 @@ export function OpportunityScene() {
                   );
                 })}
               </div>
-              <div className="mt-6 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+              <div className="mt-6 rounded-none border border-white/[0.07] bg-white/[0.025] p-3">
                 <p className="text-[10px] font-medium text-zinc-400">
                   Why the score rose
                 </p>
