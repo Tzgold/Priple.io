@@ -9,7 +9,7 @@ export default function AuthLayout({
     <div className="bg-auth relative flex min-h-screen flex-col">
       <Link
         href="/"
-        className="absolute left-6 top-6 z-10 text-sm text-zinc-400 transition-colors hover:text-white"
+        className="absolute left-6 top-6 z-10 font-mono text-[12px] text-zinc-500 transition-colors hover:text-white"
       >
         ← Home
       </Link>
