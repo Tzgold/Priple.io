@@ -390,6 +390,23 @@ h4 {
   border-radius: 4px;
 }
 
+.dash-hero {
+  background:
+    radial-gradient(ellipse 90% 80% at 82% 110%, rgba(45, 212, 191, 0.22), transparent 58%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(255, 255, 255, 0.05), transparent 55%),
+    linear-gradient(180deg, #101012 0%, #0b0b0d 100%);
+}
+
+.dash-hero::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: auto -8% -35% 35%;
+  height: 80%;
+  background: radial-gradient(closest-side, rgba(45, 212, 191, 0.16), transparent 70%);
+  filter: blur(8px);
+}
+
 .dot-panel {
   background-color: var(--bg-card);
   background-image: radial-gradient(rgba(255, 255, 255, 0.06) 0.7px, transparent 0.7px);
