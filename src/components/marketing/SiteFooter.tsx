@@ -36,13 +36,11 @@ export function SiteFooter() {
     <footer className="border-t border-white/[0.06]">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 sm:py-16 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div className="md:pr-6">
-          <Link href="/" className="text-[15px] font-semibold text-white">
+          <Link href="/" className="font-sans text-[15px] font-semibold text-white">
             Priple
           </Link>
-          <p className="mt-3 max-w-xs text-sm leading-6 text-zinc-500">
-            Track smart money, detect buy/sell and cross-chain activity, and
-            understand every move through scoring, AI narratives, and news
-            context.
+          <p className="mt-3 max-w-xs font-mono text-[12px] leading-6 text-zinc-500">
+            Smart money, alerts, scores, and news — one research surface.
           </p>
           <p className="mt-5 text-xs leading-5 text-zinc-600">
             Informational research tooling only. Not investment, legal, or tax

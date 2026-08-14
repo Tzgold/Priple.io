@@ -15,9 +15,8 @@ export default function FaqPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.5rem] sm:leading-tight">
           Before you ask
         </h1>
-        <p className="mt-4 max-w-xl text-[15px] leading-7 text-zinc-400 sm:text-base">
-          The six Priple pillars, what the scores mean, and what this product
-          is not — before you follow your first wallet.
+        <p className="mt-4 max-w-xl font-mono text-[13px] leading-6 text-zinc-400">
+          The six pillars, the scores, and what this is not.
         </p>
       </header>
 

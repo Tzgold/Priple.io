@@ -39,7 +39,7 @@ export function Button({
   onClick,
 }: ButtonProps) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors duration-200 disabled:opacity-40 disabled:pointer-events-none",
+    "inline-flex items-center justify-center gap-2 rounded-full font-mono font-medium transition-colors duration-200 disabled:opacity-40 disabled:pointer-events-none",
     variants[variant],
     sizes[size],
     className,

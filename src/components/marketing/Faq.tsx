@@ -44,7 +44,7 @@ export function FaqList() {
           <h2 className="text-[1.15rem] font-semibold tracking-tight text-white sm:text-xl">
             {item.q}
           </h2>
-          <p className="mt-3 max-w-2xl text-[15px] leading-7 text-zinc-400">{item.a}</p>
+          <p className="mt-3 max-w-2xl font-mono text-[13px] leading-6 text-zinc-400">{item.a}</p>
         </div>
       ))}
     </div>
@@ -58,18 +58,17 @@ export function FaqTeaser() {
         <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
           Before you ask
         </h2>
-        <p className="mt-3 max-w-xl text-[15px] leading-7 text-zinc-400">
-          Straight answers about all six Priple pillars — and what this product
-          is not.
+        <p className="mt-3 max-w-xl font-mono text-[13px] leading-6 text-zinc-400">
+          Straight answers. What this is — and is not.
         </p>
       </header>
       <div className="border-t border-white/[0.08]">
-        {faqItems.slice(0, 5).map((item) => (
+        {faqItems.slice(0, 4).map((item) => (
           <div key={item.q} className="border-b border-white/[0.08] py-8 sm:py-10">
             <h3 className="text-[1.15rem] font-semibold tracking-tight text-white sm:text-xl">
               {item.q}
             </h3>
-            <p className="mt-3 max-w-2xl text-[15px] leading-7 text-zinc-400">{item.a}</p>
+            <p className="mt-3 max-w-2xl font-mono text-[13px] leading-6 text-zinc-400">{item.a}</p>
           </div>
         ))}
       </div>

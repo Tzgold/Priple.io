@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { PripleMark } from "@/components/brand/PripleMark";
 import { Button } from "@/components/ui/Button";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -70,9 +71,10 @@ export function SiteNav({ className }: { className?: string }) {
 
   return (
     <header className={cn("sticky top-0 z-50 px-3 pt-3 sm:px-4 sm:pt-4", className)}>
-      <div className="relative mx-auto flex h-12 max-w-6xl items-center justify-between rounded-2xl border border-white/[0.12] bg-[#0c0c0e]/92 px-3 pl-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-3.5 sm:pl-5">
-        <Link href="/" className="text-[14px] font-semibold tracking-tight text-white">
-          Priple
+      <div className="relative mx-auto flex h-12 max-w-6xl items-center justify-between border border-white/[0.12] bg-[#0c0c0e]/92 px-3 pl-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-3.5 sm:pl-5">
+        <Link href="/" className="flex items-center gap-2.5 text-white">
+          <PripleMark size={28} />
+          <span className="font-sans text-[14px] font-semibold tracking-tight">Priple</span>
         </Link>
 
         <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-5 lg:flex xl:gap-6">
@@ -81,7 +83,7 @@ export function SiteNav({ className }: { className?: string }) {
               key={link.label}
               href={link.href}
               className={cn(
-                "text-[13px] font-medium transition-colors hover:text-white",
+                "font-mono text-[12px] font-medium transition-colors hover:text-white",
                 pathname === "/" && activeId === link.id
                   ? "text-white"
                   : "text-zinc-400",
@@ -121,7 +123,7 @@ export function SiteNav({ className }: { className?: string }) {
       </div>
 
       {open ? (
-        <div className="mx-auto mt-2 max-w-6xl overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0c0c0e]/96 p-3 shadow-2xl backdrop-blur-xl lg:hidden">
+        <div className="mx-auto mt-2 max-w-6xl overflow-hidden border border-white/[0.12] bg-[#0c0c0e]/96 p-3 shadow-2xl backdrop-blur-xl lg:hidden">
           <nav className="flex flex-col gap-0.5">
             {links.map((link) => (
               <Link
