@@ -12,6 +12,9 @@ export type PulseItem = {
   type: "buy" | "sell" | "flow" | "alert" | "stake";
   source: "market" | "personal" | "demo";
   hash?: string;
+  /** ERC-20 / token contract when Alchemy provides it. */
+  tokenAddress?: string | null;
+  network?: string;
 };
 
 type AlchemyTransfer = {
@@ -22,6 +25,7 @@ type AlchemyTransfer = {
   value?: number | null;
   asset?: string | null;
   category?: string;
+  rawContract?: { address?: string | null; decimal?: string | null };
   metadata?: { blockTimestamp?: string };
 };
 
@@ -152,6 +156,8 @@ function transferToPulse(
     type,
     source,
     hash: transfer.hash,
+    tokenAddress: transfer.rawContract?.address || null,
+    network: "eth",
   };
 }
 

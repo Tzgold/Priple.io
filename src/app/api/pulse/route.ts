@@ -5,22 +5,34 @@ import { listWallets } from "@/lib/desk-db";
 import { mockMoves } from "@/lib/mock/data";
 import { syncAlertsFromPulse } from "@/lib/pulse-alerts";
 import { requireSession } from "@/lib/session";
+import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG } from "@/lib/token-routes";
 
 function demoPulse(source: "market" | "personal"): PulseItem[] {
-  return mockMoves.map((move) => ({
-    id: `demo-${move.id}`,
-    walletLabel: move.wallet,
-    walletAddress: "",
-    action: move.action,
-    amount: move.amount,
-    asset: move.asset,
-    usd: move.usd,
-    time: move.time,
-    date: move.date,
-    status: move.status,
-    type: move.type,
-    source: source === "personal" ? "personal" : "demo",
-  }));
+  return mockMoves.map((move) => {
+    const cg = SYMBOL_TO_CG[move.asset.toUpperCase()];
+    const route = cg ? MAJOR_TOKEN_ROUTES[cg] : null;
+    const network =
+      route && "cg" in route ? "coingecko" : route?.network || "eth";
+    const tokenAddress =
+      route && "cg" in route ? route.cg : route?.address || null;
+
+    return {
+      id: `demo-${move.id}`,
+      walletLabel: move.wallet,
+      walletAddress: "",
+      action: move.action,
+      amount: move.amount,
+      asset: move.asset,
+      usd: move.usd,
+      time: move.time,
+      date: move.date,
+      status: move.status,
+      type: move.type,
+      source: source === "personal" ? "personal" : "demo",
+      tokenAddress,
+      network,
+    };
+  });
 }
 
 async function maybeSyncAlerts(userId: string, items: PulseItem[]) {
