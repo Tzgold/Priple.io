@@ -37,7 +37,7 @@ const sorts = ["score", "pnl", "name"] as const;
 export function WatchlistPanel({ workspace }: { workspace: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { trackedWallets, marketWallets, personalMode, sort, setSort } = useDesk();
+  const { trackedWallets, marketWallets, personalMode, sort, setSort, watchedTokens } = useDesk();
   const { openAddWallet } = useAddWallet();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -135,20 +135,37 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
       </nav>
 
       <div className="mt-5 px-4">
+        <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+          Coin watchlist
+        </p>
         <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {watchTokens.map((token) => (
-            <Link
-              key={token.symbol}
-              href={`/app/screener?token=${token.symbol}`}
-              className="flex w-11 shrink-0 flex-col items-center gap-2"
-              title={token.name}
-            >
-              <TokenMark symbol={token.symbol} size={36} />
-              <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-500">
-                {token.symbol}
-              </span>
-            </Link>
-          ))}
+          {watchedTokens.length === 0
+            ? watchTokens.map((token) => (
+                <Link
+                  key={token.symbol}
+                  href={`/app/screener?token=${token.symbol}`}
+                  className="flex w-11 shrink-0 flex-col items-center gap-2 opacity-50"
+                  title={`${token.name} (pin coins from screener)`}
+                >
+                  <TokenMark symbol={token.symbol} size={36} />
+                  <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-600">
+                    {token.symbol}
+                  </span>
+                </Link>
+              ))
+            : watchedTokens.slice(0, 10).map((token) => (
+                <Link
+                  key={token.id}
+                  href={`/app/screener?network=${encodeURIComponent(token.network)}&address=${encodeURIComponent(token.address)}`}
+                  className="flex w-11 shrink-0 flex-col items-center gap-2"
+                  title={token.name}
+                >
+                  <TokenMark symbol={token.symbol} imageUrl={token.imageUrl} size={36} />
+                  <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-500">
+                    {token.symbol}
+                  </span>
+                </Link>
+              ))}
         </div>
       </div>
 

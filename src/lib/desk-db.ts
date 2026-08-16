@@ -100,6 +100,17 @@ export async function createWallet(
   }
 }
 
+export async function getWallet(userId: string, walletId: string) {
+  const { rows } = await getPgPool().query<WalletRow>(
+    `SELECT id, user_id, address, chain, label, notes, created_at, updated_at
+     FROM public.tracked_wallets
+     WHERE user_id = $1 AND id = $2
+     LIMIT 1`,
+    [userId, walletId],
+  );
+  return rows[0] ?? null;
+}
+
 export async function deleteWallet(userId: string, walletId: string) {
   const { rowCount } = await getPgPool().query(
     `DELETE FROM public.tracked_wallets WHERE id = $1 AND user_id = $2`,

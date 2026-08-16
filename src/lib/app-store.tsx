@@ -10,8 +10,10 @@ import {
   type AlertItem,
   type TrackedWallet,
 } from "@/lib/mock/data";
+import { watchedTokenId, type WatchedToken } from "@/lib/watched-tokens";
 
 const PREFS_KEY = "priple-desk-prefs-v1";
+const WATCH_TOKENS_KEY = "priple-watched-tokens-v1";
 
 export type WalletSort = "score" | "pnl" | "name";
 export type ScreenerFilter = "All" | "Trending" | "Whales buying" | "Social spike";
@@ -30,7 +32,6 @@ const defaultPrefs: DeskPrefs = {
 
 type DeskContextValue = {
   wallets: TrackedWallet[];
-  /** User-saved wallets only (not market demo desks). */
   trackedWallets: TrackedWallet[];
   marketWallets: TrackedWallet[];
   personalMode: boolean;
@@ -39,6 +40,7 @@ type DeskContextValue = {
   alerts: AlertItem[];
   savedAlerts: AlertItem[];
   tokens: typeof mockTokens;
+  watchedTokens: WatchedToken[];
   moves: typeof mockMoves;
   sort: WalletSort;
   emailAlerts: boolean;
@@ -50,6 +52,8 @@ type DeskContextValue = {
   dismissAlert: (id: string) => Promise<void>;
   setEmailAlerts: (value: boolean) => void;
   refreshAlerts: () => Promise<void>;
+  isTokenWatched: (network: string, address: string) => boolean;
+  toggleWatchToken: (token: Omit<WatchedToken, "id" | "addedAt">) => void;
 };
 
 const DeskContext = createContext<DeskContextValue | null>(null);
@@ -58,6 +62,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<DeskPrefs>(defaultPrefs);
   const [savedWallets, setSavedWallets] = useState<TrackedWallet[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<AlertItem[]>([]);
+  const [watchedTokens, setWatchedTokens] = useState<WatchedToken[]>([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -66,6 +71,11 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<DeskPrefs>;
         setPrefs({ ...defaultPrefs, ...parsed });
+      }
+      const watchRaw = window.localStorage.getItem(WATCH_TOKENS_KEY);
+      if (watchRaw) {
+        const parsed = JSON.parse(watchRaw) as WatchedToken[];
+        if (Array.isArray(parsed)) setWatchedTokens(parsed);
       }
     } catch {
       setPrefs(defaultPrefs);
@@ -76,6 +86,11 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   }, [prefs, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem(WATCH_TOKENS_KEY, JSON.stringify(watchedTokens));
+  }, [watchedTokens, ready]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +112,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
           setSavedAlerts(data.alerts ?? []);
         }
       } catch {
-        // Keep mock desk usable offline; saved rows stay empty until next load.
+        // offline
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -140,8 +155,25 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       const data = (await res.json()) as { alerts: AlertItem[] };
       setSavedAlerts(data.alerts ?? []);
     } catch {
-      // Keep current inbox.
+      // keep
     }
+  }, []);
+
+  const isTokenWatched = useCallback(
+    (network: string, address: string) =>
+      watchedTokens.some((t) => t.id === watchedTokenId(network, address)),
+    [watchedTokens],
+  );
+
+  const toggleWatchToken = useCallback((token: Omit<WatchedToken, "id" | "addedAt">) => {
+    const id = watchedTokenId(token.network, token.address);
+    setWatchedTokens((current) => {
+      if (current.some((t) => t.id === id)) return current.filter((t) => t.id !== id);
+      return [
+        { ...token, id, addedAt: Date.now() },
+        ...current,
+      ].slice(0, 40);
+    });
   }, []);
 
   const value = useMemo<DeskContextValue>(
@@ -155,6 +187,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       alerts,
       savedAlerts,
       tokens: mockTokens,
+      watchedTokens,
       moves: mockMoves,
       sort: prefs.sort,
       emailAlerts: prefs.emailAlerts,
@@ -167,15 +200,12 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ label, address, chain }),
         });
         const data = (await res.json()) as { wallet?: TrackedWallet; error?: string };
-        if (!res.ok || !data.wallet) {
-          throw new Error(data.error ?? "Failed to add wallet");
-        }
+        if (!res.ok || !data.wallet) throw new Error(data.error ?? "Failed to add wallet");
         setSavedWallets((current) => [data.wallet!, ...current.filter((w) => w.id !== data.wallet!.id)]);
       },
       removeWallet: async (id) => {
         const isSaved = savedWallets.some((wallet) => wallet.id === id);
         if (!isSaved) return;
-
         const res = await fetch(`/api/wallets/${encodeURIComponent(id)}`, {
           method: "DELETE",
           credentials: "include",
@@ -195,9 +225,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({ title, detail, type }),
         });
         const data = (await res.json()) as { alert?: AlertItem; error?: string };
-        if (!res.ok || !data.alert) {
-          throw new Error(data.error ?? "Failed to create alert");
-        }
+        if (!res.ok || !data.alert) throw new Error(data.error ?? "Failed to create alert");
         setSavedAlerts((current) => [data.alert!, ...current]);
       },
       dismissAlert: async (id) => {
@@ -221,6 +249,8 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       },
       setEmailAlerts: (emailAlerts) => setPrefs((current) => ({ ...current, emailAlerts })),
       refreshAlerts,
+      isTokenWatched,
+      toggleWatchToken,
     }),
     [
       wallets,
@@ -229,11 +259,14 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       personalMode,
       alerts,
       savedAlerts,
+      watchedTokens,
       prefs.sort,
       prefs.emailAlerts,
       ready,
       savedWallets,
       refreshAlerts,
+      isTokenWatched,
+      toggleWatchToken,
     ],
   );
 
