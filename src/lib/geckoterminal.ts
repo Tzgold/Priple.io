@@ -4,7 +4,7 @@ import {
   type OnchainTokenInfo,
   type TokenDepth,
 } from "@/lib/token-info";
-import { looksLikeAddress, type BoardToken } from "@/lib/token-routes";
+import { looksLikeAddress, MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG, type BoardToken } from "@/lib/token-routes";
 
 export { looksLikeAddress, type BoardToken } from "@/lib/token-routes";
 
@@ -308,9 +308,34 @@ export type TokenSearchHit = {
   name: string;
   symbol: string;
   imageUrl: string | null;
-  source: "dex" | "coingecko";
+  source: "dex" | "coingecko" | "major";
   pairLabel?: string | null;
+  quoteSymbol?: string | null;
+  dexId?: string | null;
+  exchangeLabel?: string | null;
+  priceUsd?: number | null;
+  volume24hUsd?: number | null;
+  liquidityUsd?: number | null;
+  priceChange24h?: number | null;
+  kind?: "spot" | "pair" | "major";
 };
+
+function scoreHit(hit: TokenSearchHit, query: string) {
+  const q = query.toLowerCase();
+  const sym = hit.symbol.toLowerCase();
+  const name = hit.name.toLowerCase();
+  let score = 0;
+  if (sym === q) score += 1000;
+  else if (sym.startsWith(q)) score += 700;
+  else if (sym.includes(q)) score += 400;
+  if (name.startsWith(q)) score += 200;
+  else if (name.includes(q)) score += 80;
+  if (hit.source === "major") score += 150;
+  if (hit.source === "coingecko") score += 40;
+  score += Math.min(120, Math.log10((hit.liquidityUsd || 0) + 1) * 25);
+  score += Math.min(80, Math.log10((hit.volume24hUsd || 0) + 1) * 12);
+  return score;
+}
 
 async function searchCoinGecko(query: string): Promise<TokenSearchHit[]> {
   const key = process.env.COINGECKO_API_KEY;
@@ -324,7 +349,7 @@ async function searchCoinGecko(query: string): Promise<TokenSearchHit[]> {
     const json = (await response.json()) as {
       coins?: Array<{ id: string; name: string; symbol: string; large?: string; thumb?: string }>;
     };
-    return (json.coins || []).slice(0, 8).map((coin) => ({
+    return (json.coins || []).slice(0, 10).map((coin) => ({
       network: "coingecko",
       address: coin.id,
       name: coin.name,
@@ -332,10 +357,53 @@ async function searchCoinGecko(query: string): Promise<TokenSearchHit[]> {
       imageUrl: coin.large || coin.thumb || null,
       source: "coingecko" as const,
       pairLabel: `${coin.symbol.toUpperCase()} / USD`,
+      quoteSymbol: "USD",
+      exchangeLabel: "CoinGecko",
+      kind: "spot" as const,
     }));
   } catch {
     return [];
   }
+}
+
+function localMajorHits(query: string): TokenSearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const hits: TokenSearchHit[] = [];
+
+  for (const [symbol, cgId] of Object.entries(SYMBOL_TO_CG)) {
+    if (!symbol.toLowerCase().includes(q) && !cgId.includes(q)) continue;
+    const route = MAJOR_TOKEN_ROUTES[cgId];
+    if (!route) continue;
+    if ("cg" in route) {
+      hits.push({
+        network: "coingecko",
+        address: route.cg,
+        name: symbol,
+        symbol,
+        imageUrl: null,
+        source: "major",
+        pairLabel: `${symbol} / USD`,
+        quoteSymbol: "USD",
+        exchangeLabel: "Major",
+        kind: "major",
+      });
+    } else {
+      hits.push({
+        network: route.network,
+        address: route.address,
+        name: symbol,
+        symbol,
+        imageUrl: null,
+        source: "major",
+        pairLabel: `${symbol} / ${route.network.toUpperCase()}`,
+        exchangeLabel: route.network.toUpperCase(),
+        kind: "major",
+      });
+    }
+  }
+
+  return hits;
 }
 
 export async function searchTokens(query: string): Promise<TokenSearchHit[]> {
@@ -351,6 +419,8 @@ export async function searchTokens(query: string): Promise<TokenSearchHit[]> {
     seen.add(key);
     hits.push(hit);
   };
+
+  for (const hit of localMajorHits(q)) push(hit);
 
   if (looksLikeAddress(q)) {
     const networks = q.startsWith("0x")
@@ -369,6 +439,12 @@ export async function searchTokens(query: string): Promise<TokenSearchHit[]> {
             imageUrl: desk.imageUrl,
             source: "dex",
             pairLabel: desk.poolName || `${desk.symbol} / ${desk.network.toUpperCase()}`,
+            priceUsd: desk.priceUsd,
+            volume24hUsd: desk.volume24hUsd,
+            liquidityUsd: desk.liquidityUsd,
+            priceChange24h: desk.priceChange24h,
+            exchangeLabel: desk.network.toUpperCase(),
+            kind: "pair",
           });
           break;
         }
@@ -378,23 +454,47 @@ export async function searchTokens(query: string): Promise<TokenSearchHit[]> {
     }
   }
 
-  const [cgHits, gtJson] = await Promise.all([
+  const [{ searchDexScreener }] = await Promise.all([
+    import("@/lib/dexscreener"),
+  ]);
+
+  const [cgHits, dsHits, gtJson] = await Promise.all([
     searchCoinGecko(q),
+    searchDexScreener(q).catch(() => []),
     gtGet(
       `/search/pools?query=${encodeURIComponent(q)}&page=1&include=base_token`,
-      { noStore: true },
+      { noStore: true, retries: 1 },
     ).catch(() => null),
   ]);
 
   for (const hit of cgHits) push(hit);
 
+  for (const hit of dsHits) {
+    push({
+      network: hit.network,
+      address: hit.address,
+      name: hit.name,
+      symbol: hit.symbol,
+      imageUrl: hit.imageUrl,
+      source: "dex",
+      pairLabel: hit.pairLabel,
+      quoteSymbol: hit.quoteSymbol,
+      dexId: hit.dexId,
+      exchangeLabel: hit.dexId ? hit.dexId.toUpperCase() : hit.network.toUpperCase(),
+      priceUsd: hit.priceUsd,
+      volume24hUsd: hit.volume24hUsd,
+      liquidityUsd: hit.liquidityUsd,
+      priceChange24h: hit.priceChange24h,
+      kind: "pair",
+    });
+  }
+
   const pools = (gtJson?.data as Json[] | undefined) ?? [];
   const included = (gtJson?.included as Json[] | undefined) ?? [];
 
-  for (const pool of pools.slice(0, 15)) {
+  for (const pool of pools.slice(0, 20)) {
     const id = String(pool.id || "");
     const network = id.includes("_") ? id.slice(0, id.indexOf("_")) : "eth";
-    // Prefer chains we can chart well; still allow others.
     const baseRel = ((pool.relationships as Json | undefined)?.base_token as Json | undefined)
       ?.data as Json | undefined;
     const baseId = typeof baseRel?.id === "string" ? baseRel.id : null;
@@ -415,10 +515,19 @@ export async function searchTokens(query: string): Promise<TokenSearchHit[]> {
         typeof poolAttrs.name === "string"
           ? poolAttrs.name
           : `${String(tokenAttrs.symbol || "???").toUpperCase()} / ${network.toUpperCase()}`,
+      exchangeLabel: network.toUpperCase(),
+      priceUsd: num(poolAttrs.base_token_price_usd),
+      volume24hUsd: num(
+        (poolAttrs.volume_usd as Json | undefined)?.h24 ?? poolAttrs.volume_usd,
+      ),
+      liquidityUsd: num(poolAttrs.reserve_in_usd),
+      kind: "pair",
     });
   }
 
-  return hits.slice(0, 12);
+  return [...hits]
+    .sort((a, b) => scoreHit(b, q) - scoreHit(a, q))
+    .slice(0, 24);
 }
 
 /** @deprecated use searchTokens */
