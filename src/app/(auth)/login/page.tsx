@@ -41,15 +41,27 @@ export default function LoginPage() {
 
   async function handleGoogleSignIn() {
     setError(null);
-    await signIn.social({
-      provider: "google",
-      callbackURL: "/app",
-      fetchOptions: {
-        onError: (ctx) => {
-          setError(ctx.error.message ?? "Google sign-in failed.");
+    setPending(true);
+    try {
+      await signIn.social({
+        provider: "google",
+        callbackURL: "/app",
+        fetchOptions: {
+          onError: (ctx) => {
+            setError(
+              ctx.error.message ??
+                "Google sign-in failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google and BETTER_AUTH_URL matches.",
+            );
+            setPending(false);
+          },
         },
-      },
-    });
+      });
+    } catch {
+      setError(
+        "Google sign-in failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google and BETTER_AUTH_URL matches.",
+      );
+      setPending(false);
+    }
   }
 
   return (
@@ -166,7 +178,10 @@ export default function LoginPage() {
         <AuthTurnstile
           onToken={setCaptchaToken}
           onExpire={() => setCaptchaToken(null)}
-          onError={() => setCaptchaToken(null)}
+          onError={(message) => {
+            setCaptchaToken(null);
+            setError(message);
+          }}
         />
 
         <button type="submit" className="auth-submit mt-2 disabled:opacity-60" disabled={pending}>

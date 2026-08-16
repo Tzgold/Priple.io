@@ -40,15 +40,27 @@ export default function SignupPage() {
 
   async function handleGoogleSignIn() {
     setError(null);
-    await signIn.social({
-      provider: "google",
-      callbackURL: "/app",
-      fetchOptions: {
-        onError: (ctx) => {
-          setError(ctx.error.message ?? "Google sign-up failed.");
+    setPending(true);
+    try {
+      await signIn.social({
+        provider: "google",
+        callbackURL: "/app",
+        fetchOptions: {
+          onError: (ctx) => {
+            setError(
+              ctx.error.message ??
+                "Google sign-up failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google.",
+            );
+            setPending(false);
+          },
         },
-      },
-    });
+      });
+    } catch {
+      setError(
+        "Google sign-up failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google.",
+      );
+      setPending(false);
+    }
   }
 
   return (
@@ -217,9 +229,9 @@ export default function SignupPage() {
         <AuthTurnstile
           onToken={setCaptchaToken}
           onExpire={() => setCaptchaToken(null)}
-          onError={() => {
+          onError={(message) => {
             setCaptchaToken(null);
-            setError("Captcha failed to load. Refresh and try again.");
+            setError(message);
           }}
         />
 

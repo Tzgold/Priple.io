@@ -96,9 +96,9 @@ export default function ForgotPasswordPage() {
           <AuthTurnstile
             onToken={setCaptchaToken}
             onExpire={() => setCaptchaToken(null)}
-            onError={() => {
+            onError={(message) => {
               setCaptchaToken(null);
-              setError("Captcha failed to load. Refresh and try again.");
+              setError(message);
             }}
           />
 

@@ -36,15 +36,9 @@ function assertAuthSecrets() {
 
 assertAuthSecrets();
 
-const google =
-  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-    ? {
-        google: {
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        },
-      }
-    : {};
+const googleConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
+);
 
 const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
 const turnstileEnabled = Boolean(turnstileSecret);
@@ -62,12 +56,23 @@ const authPlugins = [
   nextCookies(),
 ];
 
-const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const baseUrl = (
+  process.env.BETTER_AUTH_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : null) ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+  "http://localhost:3000"
+).replace(/\/$/, "");
+
 const trustedOrigins = Array.from(
   new Set(
     [
       baseUrl,
       process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+      process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : null,
       // Localhost only outside production — avoids trusting http://localhost in prod auth.
       isProd() ? null : "http://localhost:3000",
     ].filter(Boolean) as string[],
@@ -108,7 +113,15 @@ export const auth = betterAuth({
       requireLocalEmailVerified: true,
     },
   },
-  socialProviders: google,
+  socialProviders: googleConfigured
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID as string,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+          prompt: "select_account",
+        },
+      }
+    : {},
   trustedOrigins,
   rateLimit: {
     enabled: true,
