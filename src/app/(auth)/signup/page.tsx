@@ -45,6 +45,7 @@ export default function SignupPage() {
       await signIn.social({
         provider: "google",
         callbackURL: "/app",
+        errorCallbackURL: "/login",
         fetchOptions: {
           onError: (ctx) => {
             setError(
@@ -229,10 +230,7 @@ export default function SignupPage() {
         <AuthTurnstile
           onToken={setCaptchaToken}
           onExpire={() => setCaptchaToken(null)}
-          onError={(message) => {
-            setCaptchaToken(null);
-            setError(message);
-          }}
+          onError={() => setCaptchaToken(null)}
         />
 
         <button

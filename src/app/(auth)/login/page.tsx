@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { AppleIcon, GoogleIcon } from "@/components/auth/AuthMark";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { AuthTurnstile } from "@/components/auth/AuthTurnstile";
@@ -32,12 +32,27 @@ function SocialButton({
   );
 }
 
-export default function LoginPage() {
+function oauthErrorMessage(code: string | null) {
+  if (!code) return null;
+  if (code === "state_mismatch" || code === "state_security_mismatch") {
+    return "Google sign-in could not complete (session state lost). Try again once. If it keeps failing, confirm BETTER_AUTH_URL is https://priple.vercel.app and Google redirect URI matches.";
+  }
+  if (code === "access_denied") return "Google sign-in was cancelled.";
+  return `Sign-in error: ${code}`;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+
+  useEffect(() => {
+    const fromOauth = oauthErrorMessage(searchParams.get("error"));
+    if (fromOauth) setError(fromOauth);
+  }, [searchParams]);
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -46,6 +61,7 @@ export default function LoginPage() {
       await signIn.social({
         provider: "google",
         callbackURL: "/app",
+        errorCallbackURL: "/login",
         fetchOptions: {
           onError: (ctx) => {
             setError(
@@ -175,13 +191,11 @@ export default function LoginPage() {
           />
         </label>
 
+        {/* Captcha errors stay inside the widget — do not block Google above. */}
         <AuthTurnstile
           onToken={setCaptchaToken}
           onExpire={() => setCaptchaToken(null)}
-          onError={(message) => {
-            setCaptchaToken(null);
-            setError(message);
-          }}
+          onError={() => setCaptchaToken(null)}
         />
 
         <button type="submit" className="auth-submit mt-2 disabled:opacity-60" disabled={pending}>
@@ -196,5 +210,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<AuthShell><p className="font-mono text-[12px] text-zinc-500">Loading…</p></AuthShell>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -118,8 +118,12 @@ export function AuthTurnstile({ onToken, onExpire, onError }: AuthTurnstileProps
         <div className="auth-turnstile-error">
           <p>{errorText}</p>
           <p className="auth-turnstile-hint">
-            Site key prefix: {siteKey.slice(0, 10)}… · host:{" "}
-            {typeof window !== "undefined" ? window.location.hostname : "—"}
+            This page host:{" "}
+            {typeof window !== "undefined" ? window.location.hostname : "—"} · Vercel site key
+            starts with {siteKey.slice(0, 12)}… Open Cloudflare → Turnstile → the widget whose
+            Site Key starts the same, confirm Hostnames lists priple.vercel.app (saved after
+            refresh). Redeploy only if you changed the Vercel site key — hostname edits apply
+            immediately.
           </p>
           <button type="button" className="auth-turnstile-retry" onClick={retry}>
             Retry captcha
