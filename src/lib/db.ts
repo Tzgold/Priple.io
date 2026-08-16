@@ -1,10 +1,12 @@
 import { Pool } from "pg";
-import Database from "better-sqlite3";
-import path from "path";
 
 const globalForDb = globalThis as unknown as {
   priplePgPool?: Pool;
 };
+
+function isProduction() {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+}
 
 export function getPgPool(): Pool {
   const url = process.env.DATABASE_URL;
@@ -13,19 +15,27 @@ export function getPgPool(): Pool {
   }
 
   if (!globalForDb.priplePgPool) {
+    const isSupabase = url.includes("supabase");
     globalForDb.priplePgPool = new Pool({
       connectionString: url,
-      ssl: url.includes("supabase") ? { rejectUnauthorized: false } : undefined,
-      max: 10,
+      // Supabase pooler uses certs that Node may not trust in all environments.
+      ssl: isSupabase || isProduction() ? { rejectUnauthorized: false } : undefined,
+      max: isProduction() ? 5 : 10,
+      idleTimeoutMillis: 20_000,
+      connectionTimeoutMillis: 10_000,
     });
   }
 
   return globalForDb.priplePgPool;
 }
 
-/** Better Auth database adapter (Postgres when DATABASE_URL is set). */
+/** Better Auth database — Postgres only (no sqlite on Vercel). */
 export function createAuthDatabase() {
   const url = process.env.DATABASE_URL;
-  if (url) return getPgPool();
-  return new Database(path.join(process.cwd(), "sqlite.db"));
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is required. SQLite is not supported — set DATABASE_URL for local and production.",
+    );
+  }
+  return getPgPool();
 }

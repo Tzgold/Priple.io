@@ -43,6 +43,12 @@ export async function sendResetPasswordEmail({ to, url }: SendResetEmailInput) {
   const from = process.env.EMAIL_FROM ?? "Priple <onboarding@resend.dev>";
 
   if (!apiKey) {
+    const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+    if (isProd) {
+      console.error("[email] RESEND_API_KEY missing — cannot send password reset in production.");
+      throw new Error("Email delivery is not configured.");
+    }
+    // Local only: never log reset links in production logs.
     console.warn(`[email] RESEND_API_KEY missing. Password reset for ${to}: ${url}`);
     return;
   }
