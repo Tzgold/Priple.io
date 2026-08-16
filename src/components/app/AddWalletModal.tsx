@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useDesk } from "@/lib/app-store";
 
-const chains = ["ETH", "SOL", "BNB", "ARB", "BASE"];
+import { DESK_CHAINS } from "@/lib/alchemy-networks";
+
+const chains = [...DESK_CHAINS];
 
 export function AddWalletModal({
   open,
@@ -23,7 +25,7 @@ export function AddWalletModal({
       <div className="w-full max-w-md rounded-[22px] border border-white/10 bg-[#0c0c0e] p-5">
         <h2 className="font-sans text-xl font-semibold text-white">Add wallet</h2>
         <p className="mt-1 font-mono text-[12px] text-zinc-500">
-          Track a desk or address. Indexing comes later — it will show in your list now.
+          ETH, Base, Arb, OP, Polygon, BNB, Avalanche, or Solana — live dossier + chart marks when Alchemy covers that network.
         </p>
 
         <form

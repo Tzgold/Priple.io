@@ -1,3 +1,12 @@
+import {
+  alchemyRpcUrlFor,
+  deskChainToGtNetwork,
+  isSolanaChain,
+  normalizeDeskChain,
+  nativeSymbolForChain,
+  type DeskChain,
+} from "@/lib/alchemy-networks";
+
 export type PulseItem = {
   id: string;
   walletLabel: string;
@@ -33,22 +42,19 @@ type AlchemyTransfersResult = {
   transfers?: AlchemyTransfer[];
 };
 
-function alchemyUrl() {
-  const explicit = process.env.ALCHEMY_RPC_URL;
-  if (explicit) return explicit;
-  const key = process.env.ALCHEMY_API_KEY;
-  if (!key) return null;
-  return `https://eth-mainnet.g.alchemy.com/v2/${key}`;
-}
-
 function formatUsdGuess(value: number | null | undefined, asset: string) {
   if (value == null || Number.isNaN(value)) return "—";
+  const upper = asset.toUpperCase();
   const approx =
-    asset.toUpperCase() === "ETH"
+    upper === "ETH" || upper === "WETH"
       ? value * 3400
-      : asset.toUpperCase() === "USDC" || asset.toUpperCase() === "USDT"
-        ? value
-        : value;
+      : upper === "SOL"
+        ? value * 150
+        : upper === "BNB"
+          ? value * 600
+          : upper === "USDC" || upper === "USDT"
+            ? value
+            : value;
   if (approx >= 1_000_000) return `$${(approx / 1_000_000).toFixed(2)}M`;
   if (approx >= 1_000) return `$${Math.round(approx).toLocaleString("en-US")}`;
   return `$${approx.toFixed(2)}`;
@@ -92,8 +98,8 @@ function splitWhen(iso?: string) {
   };
 }
 
-async function fetchTransfersForAddress(address: string, direction: "from" | "to") {
-  const url = alchemyUrl();
+async function fetchEvmTransfers(chain: DeskChain, address: string, direction: "from" | "to") {
+  const url = alchemyRpcUrlFor(chain);
   if (!url) return [] as AlchemyTransfer[];
 
   const params: Record<string, unknown> = {
@@ -133,8 +139,10 @@ function transferToPulse(
   transfer: AlchemyTransfer,
   wallet: { label: string; address: string },
   source: PulseItem["source"],
+  network: string,
+  nativeSymbol: string,
 ): PulseItem | null {
-  const asset = (transfer.asset || "ETH").toUpperCase();
+  const asset = (transfer.asset || nativeSymbol).toUpperCase();
   const value = transfer.value ?? null;
   const walletLower = wallet.address.toLowerCase();
   const isOut = (transfer.from || "").toLowerCase() === walletLower;
@@ -157,24 +165,80 @@ function transferToPulse(
     source,
     hash: transfer.hash,
     tokenAddress: transfer.rawContract?.address || null,
-    network: "eth",
+    network,
   };
 }
 
+async function fetchSolPulse(
+  wallet: { label: string; address: string },
+  source: PulseItem["source"],
+): Promise<PulseItem[]> {
+  const url = alchemyRpcUrlFor("SOL");
+  if (!url) return [];
+
+  const sigRes = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getSignaturesForAddress",
+      params: [wallet.address, { limit: 8 }],
+    }),
+    next: { revalidate: 45 },
+  });
+  if (!sigRes.ok) return [];
+  const sigJson = (await sigRes.json()) as {
+    result?: Array<{ signature?: string; blockTime?: number | null; err?: unknown }>;
+  };
+  const items: PulseItem[] = [];
+  for (const row of sigJson.result || []) {
+    if (!row.signature || row.err) continue;
+    const when = splitWhen(
+      row.blockTime ? new Date(row.blockTime * 1000).toISOString() : undefined,
+    );
+    items.push({
+      id: row.signature,
+      walletLabel: wallet.label,
+      walletAddress: wallet.address,
+      action: "Activity",
+      amount: "—",
+      asset: "SOL",
+      usd: "—",
+      time: when.time,
+      date: when.date,
+      status: "Confirmed",
+      type: "flow",
+      source,
+      hash: row.signature,
+      tokenAddress: null,
+      network: "solana",
+    });
+  }
+  return items;
+}
+
 export async function buildPulseForWallets(
-  wallets: Array<{ label: string; address: string }>,
+  wallets: Array<{ label: string; address: string; chain?: string }>,
   source: "market" | "personal",
 ): Promise<PulseItem[]> {
-  if (!alchemyUrl()) return [];
-
   const batches = await Promise.all(
-    wallets.slice(0, 6).map(async (wallet) => {
+    wallets.slice(0, 8).map(async (wallet) => {
+      const chain = normalizeDeskChain(wallet.chain || "ETH") || "ETH";
+      if (!alchemyRpcUrlFor(chain)) return [] as PulseItem[];
+
+      if (isSolanaChain(chain)) {
+        return fetchSolPulse(wallet, source);
+      }
+
+      const network = deskChainToGtNetwork(chain);
+      const nativeSymbol = nativeSymbolForChain(chain);
       const [outgoing, incoming] = await Promise.all([
-        fetchTransfersForAddress(wallet.address, "from"),
-        fetchTransfersForAddress(wallet.address, "to"),
+        fetchEvmTransfers(chain, wallet.address, "from"),
+        fetchEvmTransfers(chain, wallet.address, "to"),
       ]);
       return [...outgoing, ...incoming]
-        .map((transfer) => transferToPulse(transfer, wallet, source))
+        .map((transfer) => transferToPulse(transfer, wallet, source, network, nativeSymbol))
         .filter((item): item is PulseItem => Boolean(item));
     }),
   );

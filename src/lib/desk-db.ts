@@ -1,8 +1,14 @@
 import { randomUUID } from "crypto";
 import { getPgPool } from "@/lib/db";
+import {
+  DESK_CHAINS,
+  chainAssetSymbol,
+  isDeskChain,
+  type DeskChain,
+} from "@/lib/alchemy-networks";
 
-export const CHAINS = ["ETH", "SOL", "BNB", "ARB", "BASE"] as const;
-export type DeskChain = (typeof CHAINS)[number];
+export const CHAINS = DESK_CHAINS;
+export type { DeskChain };
 
 export const ALERT_TYPES = ["signal", "flow", "social", "score"] as const;
 export type DeskAlertType = (typeof ALERT_TYPES)[number];
@@ -31,7 +37,7 @@ export type AlertEventRow = {
 };
 
 function isChain(value: string): value is DeskChain {
-  return (CHAINS as readonly string[]).includes(value);
+  return isDeskChain(value);
 }
 
 function isAlertType(value: string): value is DeskAlertType {
@@ -163,11 +169,7 @@ export async function dismissAlertEvent(userId: string, alertId: string) {
 }
 
 export function chainAsset(chain: string) {
-  if (chain === "SOL") return "SOL";
-  if (chain === "BNB") return "BNB";
-  if (chain === "ARB") return "ARB";
-  if (chain === "BASE") return "ETH";
-  return "ETH";
+  return chainAssetSymbol(chain);
 }
 
 export function relativeTime(date: Date) {

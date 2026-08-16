@@ -57,19 +57,38 @@ export type DexScreenerEnrichment = {
   pairUrl: string | null;
   imageUrl: string | null;
   socials: DexScreenerSocials;
+  pools: DexPoolOption[];
   source: "dexscreener";
+};
+
+export type DexPoolOption = {
+  pairAddress: string;
+  pairUrl: string | null;
+  dexId: string | null;
+  quoteSymbol: string | null;
+  label: string;
+  liquidityUsd: number | null;
+  volume24hUsd: number | null;
+  priceUsd: number | null;
+  priceChange24h: number | null;
+  marketCapUsd: number | null;
+  fdvUsd: number | null;
+  chainId: string | null;
 };
 
 type DsPair = {
   chainId?: string;
   pairAddress?: string;
   url?: string;
+  dexId?: string;
   priceUsd?: string;
   marketCap?: number;
   fdv?: number;
   liquidity?: { usd?: number };
   volume?: { h24?: number };
   priceChange?: { h24?: number };
+  baseToken?: { address?: string; name?: string; symbol?: string };
+  quoteToken?: { address?: string; name?: string; symbol?: string };
   info?: {
     imageUrl?: string;
     websites?: Array<{ url?: string } | string>;
@@ -135,6 +154,26 @@ export async function fetchDexScreenerEnrichment(
   });
 
   const best = ranked[0];
+  const pools: DexPoolOption[] = ranked.slice(0, 8).map((pair) => {
+    const base = (pair.baseToken?.symbol || "?").toUpperCase();
+    const quote = (pair.quoteToken?.symbol || "").toUpperCase() || null;
+    const dex = pair.dexId || "dex";
+    return {
+      pairAddress: pair.pairAddress || "",
+      pairUrl: pair.url || null,
+      dexId: pair.dexId || null,
+      quoteSymbol: quote,
+      label: `${base}/${quote || "?"} · ${dex}${pair.liquidity?.usd != null ? ` · $${Math.round(pair.liquidity.usd).toLocaleString("en-US")}` : ""}`,
+      liquidityUsd: num(pair.liquidity?.usd),
+      volume24hUsd: num(pair.volume?.h24),
+      priceUsd: num(pair.priceUsd),
+      priceChange24h: num(pair.priceChange?.h24),
+      marketCapUsd: num(pair.marketCap),
+      fdvUsd: num(pair.fdv),
+      chainId: pair.chainId || null,
+    };
+  }).filter((p) => p.pairAddress);
+
   return {
     priceUsd: num(best.priceUsd),
     marketCapUsd: num(best.marketCap),
@@ -146,6 +185,7 @@ export async function fetchDexScreenerEnrichment(
     pairUrl: best.url || null,
     imageUrl: best.info?.imageUrl || null,
     socials: parseSocials(best.info),
+    pools,
     source: "dexscreener",
   };
 }

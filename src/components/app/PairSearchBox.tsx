@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Clock, Search, Star, X } from "lucide-react";
 import { TokenMark } from "@/components/app/TokenMark";
+import { useDesk } from "@/lib/app-store";
 import { cn } from "@/lib/cn";
+import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG, TV_SYMBOL_BY_CG } from "@/lib/token-routes";
 
 export type PairHit = {
   network: string;
@@ -24,6 +26,8 @@ export type PairHit = {
 };
 
 type FilterTab = "all" | "majors" | "dex";
+
+const RECENTS_KEY = "priple-search-recents-v1";
 
 function money(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return null;
@@ -49,6 +53,64 @@ function highlightMatch(text: string, query: string) {
   );
 }
 
+function majorSuggestions(): PairHit[] {
+  const hits: PairHit[] = [];
+  for (const [symbol, cgId] of Object.entries(SYMBOL_TO_CG)) {
+    const route = MAJOR_TOKEN_ROUTES[cgId];
+    if (!route) continue;
+    const tv = TV_SYMBOL_BY_CG[cgId];
+    if ("cg" in route) {
+      hits.push({
+        network: "coingecko",
+        address: route.cg,
+        name: symbol,
+        symbol,
+        imageUrl: null,
+        source: "major",
+        pairLabel: `${symbol} / USD`,
+        exchangeLabel: tv ? "TV" : "Major",
+        kind: "major",
+      });
+    } else {
+      hits.push({
+        network: route.network,
+        address: route.address,
+        name: symbol,
+        symbol,
+        imageUrl: null,
+        source: "major",
+        pairLabel: `${symbol} / ${route.network.toUpperCase()}`,
+        exchangeLabel: tv ? "TV" : route.network.toUpperCase(),
+        kind: "major",
+      });
+    }
+  }
+  return hits;
+}
+
+function readRecents(): PairHit[] {
+  try {
+    const raw = window.localStorage.getItem(RECENTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PairHit[];
+    return Array.isArray(parsed) ? parsed.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(hit: PairHit) {
+  try {
+    const prev = readRecents().filter(
+      (row) => !(row.network === hit.network && row.address.toLowerCase() === hit.address.toLowerCase()),
+    );
+    const next = [hit, ...prev].slice(0, 8);
+    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
+
 export function PairSearchBox({
   onSelect,
   className,
@@ -58,8 +120,10 @@ export function PairSearchBox({
   className?: string;
   placeholder?: string;
 }) {
+  const { watchedTokens } = useDesk();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<PairHit[]>([]);
+  const [recents, setRecents] = useState<PairHit[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,15 +133,52 @@ export function PairSearchBox({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const reqId = useRef(0);
 
+  const emptySuggestions = useMemo(() => {
+    const watchHits: PairHit[] = watchedTokens.slice(0, 8).map((t) => ({
+      network: t.network,
+      address: t.address,
+      name: t.name,
+      symbol: t.symbol,
+      imageUrl: t.imageUrl,
+      source: t.network === "coingecko" ? "coingecko" : "dex",
+      pairLabel: `${t.symbol} · watchlist`,
+      exchangeLabel: "★",
+      kind: t.network === "coingecko" ? "spot" : "pair",
+    }));
+    return {
+      recents,
+      watchlist: watchHits,
+      majors: majorSuggestions(),
+    };
+  }, [watchedTokens, recents]);
+
+  const browseRows = useMemo(() => {
+    const rows: Array<{ section: string; hit: PairHit }> = [];
+    for (const hit of emptySuggestions.recents) rows.push({ section: "Recent", hit });
+    for (const hit of emptySuggestions.watchlist) rows.push({ section: "Watchlist", hit });
+    for (const hit of emptySuggestions.majors) rows.push({ section: "Majors", hit });
+    return rows;
+  }, [emptySuggestions]);
+
   const filtered = useMemo(() => {
     if (tab === "majors") {
-      return hits.filter((h) => h.source === "major" || h.source === "coingecko" || h.kind === "major" || h.kind === "spot");
+      return hits.filter(
+        (h) => h.source === "major" || h.source === "coingecko" || h.kind === "major" || h.kind === "spot",
+      );
     }
     if (tab === "dex") {
       return hits.filter((h) => h.source === "dex" || h.kind === "pair");
     }
     return hits;
   }, [hits, tab]);
+
+  const listRows = query.trim()
+    ? filtered.map((hit) => ({ section: null as string | null, hit }))
+    : browseRows;
+
+  useEffect(() => {
+    setRecents(readRecents());
+  }, []);
 
   useEffect(() => {
     function onDoc(event: MouseEvent) {
@@ -131,16 +232,18 @@ export function PairSearchBox({
 
   useEffect(() => {
     setActive(0);
-  }, [tab, filtered.length]);
+  }, [tab, listRows.length, query]);
 
   function choose(hit: PairHit) {
+    pushRecent(hit);
+    setRecents(readRecents());
     onSelect(hit);
     setQuery("");
     setHits([]);
     setOpen(false);
   }
 
-  const showPanel = open && query.trim().length > 0;
+  const showPanel = open;
 
   return (
     <div ref={boxRef} className={cn("relative w-full", className)}>
@@ -159,16 +262,17 @@ export function PairSearchBox({
               setOpen(false);
               return;
             }
-            if (!showPanel || filtered.length === 0) return;
+            if (!showPanel || listRows.length === 0) return;
             if (event.key === "ArrowDown") {
               event.preventDefault();
-              setActive((i) => Math.min(i + 1, filtered.length - 1));
+              setActive((i) => Math.min(i + 1, listRows.length - 1));
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
               setActive((i) => Math.max(i - 1, 0));
             } else if (event.key === "Enter") {
               event.preventDefault();
-              choose(filtered[active] || filtered[0]);
+              const row = listRows[active] || listRows[0];
+              if (row) choose(row.hit);
             }
           }}
           placeholder={placeholder}
@@ -176,9 +280,7 @@ export function PairSearchBox({
           autoComplete="off"
           spellCheck={false}
         />
-        {loading ? (
-          <span className="font-mono text-[10px] text-zinc-500">…</span>
-        ) : null}
+        {loading ? <span className="font-mono text-[10px] text-zinc-500">…</span> : null}
         {query ? (
           <button
             type="button"
@@ -209,37 +311,44 @@ export function PairSearchBox({
             </button>
           </div>
 
-          <div className="flex gap-1.5 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
-            {(
-              [
-                ["all", "All"],
-                ["majors", "Majors / Spot"],
-                ["dex", "DEX pairs"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={cn(
-                  "shrink-0 rounded-full px-3 py-1 font-mono text-[11px] transition-colors",
-                  tab === key
-                    ? "bg-white text-[#09090b]"
-                    : "bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-white",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {query.trim() ? (
+            <div className="flex gap-1.5 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
+              {(
+                [
+                  ["all", "All"],
+                  ["majors", "Majors / Spot"],
+                  ["dex", "DEX pairs"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1 font-mono text-[11px] transition-colors",
+                    tab === key
+                      ? "bg-white text-[#09090b]"
+                      : "bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-white",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
-          {filtered.length === 0 ? (
+          {listRows.length === 0 ? (
             <p className="px-4 py-8 text-center font-mono text-[12px] text-zinc-500">
-              {loading ? "Searching markets…" : error || "No matches — try ticker, name, or contract"}
+              {loading
+                ? "Searching markets…"
+                : error || "No matches — try ticker, name, or contract"}
             </p>
           ) : (
             <ul className="max-h-[min(28rem,55vh)] overflow-auto py-1">
-              {filtered.map((hit, index) => {
+              {listRows.map((row, index) => {
+                const hit = row.hit;
+                const prevSection = index > 0 ? listRows[index - 1]?.section : null;
+                const showSection = Boolean(row.section && row.section !== prevSection);
                 const change = hit.priceChange24h;
                 const badge =
                   hit.kind === "major" || hit.source === "major"
@@ -247,8 +356,16 @@ export function PairSearchBox({
                     : hit.kind === "spot" || hit.source === "coingecko"
                       ? "SPOT"
                       : (hit.network || "DEX").toUpperCase();
+
                 return (
-                  <li key={`${hit.network}-${hit.address}-${hit.source}-${hit.pairLabel || ""}`}>
+                  <li key={`${row.section || "q"}-${hit.network}-${hit.address}-${hit.symbol}`}>
+                    {showSection ? (
+                      <div className="flex items-center gap-1.5 px-4 pb-1 pt-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                        {row.section === "Recent" ? <Clock className="h-3 w-3" /> : null}
+                        {row.section === "Watchlist" ? <Star className="h-3 w-3" /> : null}
+                        {row.section}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       onMouseEnter={() => setActive(index)}
@@ -282,7 +399,11 @@ export function PairSearchBox({
                           <span
                             className={cn(
                               "block font-mono text-[10px]",
-                              change > 0 ? "text-teal-400" : change < 0 ? "text-rose-400" : "text-zinc-500",
+                              change > 0
+                                ? "text-teal-400"
+                                : change < 0
+                                  ? "text-rose-400"
+                                  : "text-zinc-500",
                             )}
                           >
                             {change > 0 ? "+" : ""}
@@ -306,7 +427,9 @@ export function PairSearchBox({
           )}
 
           <p className="border-t border-white/[0.06] px-4 py-2 text-center font-mono text-[10px] text-zinc-600">
-            Tip: paste a contract for exact chain match · ↑↓ Enter to open
+            {query.trim()
+              ? "Tip: paste a contract for exact chain match · ↑↓ Enter to open"
+              : "Before you type: recents, watchlist, and majors — then search any pair"}
           </p>
         </div>
       ) : null}

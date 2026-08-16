@@ -61,15 +61,17 @@ export async function GET(request: Request) {
         ? "personal"
         : "market";
 
-  const ethTracked = saved
-    .filter((row) => row.chain === "ETH")
-    .map((row) => ({ label: row.label, address: row.address }));
+  const tracked = saved.map((row) => ({
+    label: row.label,
+    address: row.address,
+    chain: row.chain,
+  }));
 
   try {
-    // Always harvest alerts from the user's own ETH desks when they have any.
+    // Harvest alerts from all of the user's tracked desks (every supported chain).
     let personalItems: PulseItem[] = [];
-    if (ethTracked.length > 0) {
-      personalItems = await buildPulseForWallets(ethTracked, "personal");
+    if (tracked.length > 0) {
+      personalItems = await buildPulseForWallets(tracked, "personal");
       await maybeSyncAlerts(session.user.id, personalItems);
     }
 
@@ -90,12 +92,13 @@ export async function GET(request: Request) {
       CURATED_SMART_MONEY.map((wallet) => ({
         label: wallet.label,
         address: wallet.address,
+        chain: wallet.chain,
       })),
       "market",
     );
 
     // Empty desk: seed inbox from significant market pulse so alerts feel live.
-    if (ethTracked.length === 0 && marketItems.length > 0) {
+    if (tracked.length === 0 && marketItems.length > 0) {
       await maybeSyncAlerts(session.user.id, marketItems);
     }
 

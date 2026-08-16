@@ -13,6 +13,7 @@ import {
   dexScreenerPairPageUrl,
   fetchDexScreenerEnrichment,
   toDexScreenerChain,
+  type DexPoolOption,
 } from "@/lib/dexscreener";
 import type { Candle, TokenDesk, TokenTrade } from "@/lib/geckoterminal";
 import { TV_SYMBOL_BY_CG } from "@/lib/token-routes";
@@ -125,6 +126,7 @@ export function TokenDeskView({
   const [chartScale, setChartScale] = useState<ChartScale>("price");
   const [dsPairAddress, setDsPairAddress] = useState<string | null>(null);
   const [dsPairUrl, setDsPairUrl] = useState<string | null>(null);
+  const [poolOptions, setPoolOptions] = useState<DexPoolOption[]>([]);
   const [walletMarks, setWalletMarks] = useState<WalletChartMark[]>([]);
   const [marksNote, setMarksNote] = useState<string | null>(null);
 
@@ -187,6 +189,38 @@ export function TokenDeskView({
     else setChartMode("lightweight");
   }, [tvSymbol, canDexScreener, network, address, trackingActive]);
 
+  // Soft refresh of Dex stats while the desk is open (keeps header live without hammering GT).
+  useEffect(() => {
+    if (network === "coingecko" || !address) return;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const enrich = await fetchDexScreenerEnrichment(address, network);
+          if (!enrich) return;
+          setPoolOptions(enrich.pools || []);
+          setToken((prev) => {
+            if (!prev) return prev;
+            const selected =
+              enrich.pools.find((p) => p.pairAddress === dsPairAddress) || enrich.pools[0];
+            return {
+              ...prev,
+              priceUsd: selected?.priceUsd ?? enrich.priceUsd ?? prev.priceUsd,
+              marketCapUsd: selected?.marketCapUsd ?? enrich.marketCapUsd ?? prev.marketCapUsd,
+              fdvUsd: selected?.fdvUsd ?? enrich.fdvUsd ?? prev.fdvUsd,
+              volume24hUsd: selected?.volume24hUsd ?? enrich.volume24hUsd ?? prev.volume24hUsd,
+              liquidityUsd: selected?.liquidityUsd ?? enrich.liquidityUsd ?? prev.liquidityUsd,
+              priceChange24h:
+                selected?.priceChange24h ?? enrich.priceChange24h ?? prev.priceChange24h,
+            };
+          });
+        } catch {
+          // keep last good values
+        }
+      })();
+    }, 45_000);
+    return () => window.clearInterval(timer);
+  }, [network, address, dsPairAddress]);
+
   useEffect(() => {
     if (!trackWallet || network === "coingecko") {
       setWalletMarks([]);
@@ -202,13 +236,30 @@ export function TokenDeskView({
           .map((w) => ({
             address: (w.fullAddress || w.address || "").trim(),
             label: w.label,
+            chain: w.chain,
           }))
-          .filter((w) => w.address.length >= 8);
+          .filter((w) => w.address.length >= 8)
+          .filter((w) => {
+            // Prefer same-chain desks for this token; always keep the focus wallet.
+            if (!trackWallet) return true;
+            const focus = trackWallet.toLowerCase();
+            if (w.address.toLowerCase() === focus) return true;
+            const want = network.toLowerCase();
+            const have = (w.chain || "").toLowerCase();
+            if (want === "eth" || want === "ethereum") return have === "eth" || have === "ethereum" || !have;
+            if (want === "solana") return have === "sol" || have === "solana";
+            if (want === "bsc") return have === "bnb" || have === "bsc";
+            if (want === "arbitrum") return have === "arb" || have === "arbitrum";
+            if (want === "optimism") return have === "op" || have === "optimism";
+            if (want === "avalanche") return have === "avax" || have === "avalanche";
+            return have === want || have.includes(want) || want.includes(have);
+          });
 
         if (trackWallet && !walletList.some((w) => w.address.toLowerCase() === trackWallet.toLowerCase())) {
           walletList.unshift({
             address: trackWallet,
             label: trackWalletLabel || "Wallet",
+            chain: network,
           });
         }
 
@@ -222,6 +273,7 @@ export function TokenDeskView({
 
         const qs = new URLSearchParams({
           token: tokenAddr,
+          network,
           wallets: walletList.map((w) => w.address).join(","),
           labels: JSON.stringify(labels),
         });
@@ -290,6 +342,7 @@ export function TokenDeskView({
       setCgCandles([]);
       setDsPairAddress(null);
       setDsPairUrl(null);
+      setPoolOptions([]);
       setChartScale("price");
       try {
         if (network === "coingecko") {
@@ -353,6 +406,7 @@ export function TokenDeskView({
                 if (!cancelled && enrich) {
                   setDsPairAddress(enrich.pairAddress);
                   setDsPairUrl(enrich.pairUrl);
+                  setPoolOptions(enrich.pools || []);
                   setToken({
                     network,
                     address,
@@ -403,6 +457,7 @@ export function TokenDeskView({
           if (!cancelled && enrich && nextToken) {
             setDsPairAddress(enrich.pairAddress);
             setDsPairUrl(enrich.pairUrl);
+            setPoolOptions(enrich.pools || []);
             const existingSocials =
               (nextToken as LoadedDesk).info?.socials ||
               (nextToken as LoadedDesk).socials ||
@@ -442,6 +497,7 @@ export function TokenDeskView({
           } else if (!cancelled && enrich?.pairAddress) {
             setDsPairAddress(enrich.pairAddress);
             setDsPairUrl(enrich.pairUrl);
+            setPoolOptions(enrich.pools || []);
           }
         } catch {
           // Keep GT-only desk.
@@ -776,19 +832,57 @@ export function TokenDeskView({
                   DexScreener
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => setChartMode("lightweight")}
-                className={cn(
-                  "rounded-full px-2.5 py-1 font-mono text-[10px]",
-                  chartMode === "lightweight"
-                    ? "bg-white text-[#09090b]"
-                    : "text-zinc-500 hover:text-white",
-                )}
-              >
-                Priple{trackingActive ? " · tracking" : ""}
-              </button>
+              {trackingActive || (!tvSymbol && !canDexScreener) ? (
+                <button
+                  type="button"
+                  onClick={() => setChartMode("lightweight")}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 font-mono text-[10px]",
+                    chartMode === "lightweight"
+                      ? "bg-white text-[#09090b]"
+                      : "text-zinc-500 hover:text-white",
+                  )}
+                >
+                  Priple{trackingActive ? " · tracking" : ""}
+                </button>
+              ) : null}
             </div>
+            {!trackingActive && poolOptions.length > 1 ? (
+              <label className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-500">
+                Pool
+                <select
+                  value={dsPairAddress || poolOptions[0]?.pairAddress || ""}
+                  onChange={(event) => {
+                    const next = poolOptions.find((p) => p.pairAddress === event.target.value);
+                    if (!next) return;
+                    setDsPairAddress(next.pairAddress);
+                    setDsPairUrl(next.pairUrl);
+                    setChartMode("dexscreener");
+                    setToken((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            poolAddress: next.pairAddress,
+                            priceUsd: next.priceUsd ?? prev.priceUsd,
+                            marketCapUsd: next.marketCapUsd ?? prev.marketCapUsd,
+                            fdvUsd: next.fdvUsd ?? prev.fdvUsd,
+                            volume24hUsd: next.volume24hUsd ?? prev.volume24hUsd,
+                            liquidityUsd: next.liquidityUsd ?? prev.liquidityUsd,
+                            priceChange24h: next.priceChange24h ?? prev.priceChange24h,
+                          }
+                        : prev,
+                    );
+                  }}
+                  className="max-w-[220px] truncate rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[10px] text-zinc-300 outline-none hover:border-white/20"
+                >
+                  {poolOptions.map((pool) => (
+                    <option key={pool.pairAddress} value={pool.pairAddress} className="bg-[#0c0c0e]">
+                      {pool.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {chartMode === "lightweight" && canMcapChart ? (
               <div className="flex gap-1 rounded-full border border-white/10 p-0.5">
                 <button
@@ -970,15 +1064,92 @@ export function TokenDeskView({
                 Holder distribution unavailable for this selection.
               </p>
             )}
+
+            <div>
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                Security
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric
+                  label="GT score"
+                  value={
+                    token?.info?.security.gtScore != null
+                      ? token.info.security.gtScore.toFixed(1)
+                      : "—"
+                  }
+                />
+                <Metric
+                  label="Verified"
+                  value={
+                    token?.info?.security.verified == null
+                      ? "—"
+                      : token.info.security.verified
+                        ? "Yes"
+                        : "No"
+                  }
+                  className={
+                    token?.info?.security.verified
+                      ? "text-teal-300"
+                      : token?.info?.security.verified === false
+                        ? "text-amber-300"
+                        : undefined
+                  }
+                />
+                <Metric
+                  label="Honeypot"
+                  value={
+                    token?.info?.security.isHoneypot == null
+                      ? "—"
+                      : String(token.info.security.isHoneypot)
+                  }
+                  className={
+                    token?.info?.security.isHoneypot === true ||
+                    token?.info?.security.isHoneypot === "true"
+                      ? "text-rose-300"
+                      : undefined
+                  }
+                />
+                <Metric
+                  label="Dev holding"
+                  value={
+                    token?.info?.security.developerHoldingPct != null
+                      ? `${token.info.security.developerHoldingPct.toFixed(1)}%`
+                      : "—"
+                  }
+                />
+              </div>
+              {(token?.info?.security.mintAuthority || token?.info?.security.freezeAuthority) && (
+                <div className="mt-3 space-y-1 font-mono text-[11px] text-zinc-500">
+                  {token.info.security.mintAuthority ? (
+                    <p>Mint authority: {token.info.security.mintAuthority}</p>
+                  ) : null}
+                  {token.info.security.freezeAuthority ? (
+                    <p>Freeze authority: {token.info.security.freezeAuthority}</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         ) : tab === "overview" ? (
-          <div className="space-y-2 px-4 py-4 font-mono text-[12px] text-zinc-400">
+          <div className="space-y-3 px-4 py-4 font-mono text-[12px] text-zinc-400">
             <p>
               Full research desk for anything a tracked wallet can buy — majors and tiny memecoins.
             </p>
             {token?.info?.description ? (
               <p className="leading-5 text-zinc-500">{token.info.description.slice(0, 420)}</p>
             ) : null}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Metric label="Liquidity" value={money(token?.liquidityUsd)} />
+              <Metric label="24H volume" value={money(token?.volume24hUsd)} />
+              <Metric
+                label="Depth ratio"
+                value={
+                  token?.depth?.depthRatio != null
+                    ? `${(token.depth.depthRatio * 100).toFixed(2)}%`
+                    : "—"
+                }
+              />
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
