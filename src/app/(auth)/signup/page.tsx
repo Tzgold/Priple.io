@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppleIcon, GoogleIcon } from "@/components/auth/AuthMark";
 import { AuthShell } from "@/components/auth/AuthShell";
@@ -33,8 +32,8 @@ function SocialButton({
 }
 
 export default function SignupPage() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
@@ -86,6 +85,7 @@ export default function SignupPage() {
         onSubmit={async (event) => {
           event.preventDefault();
           setError(null);
+          setNotice(null);
 
           const form = event.currentTarget;
           const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
@@ -134,8 +134,11 @@ export default function SignupPage() {
                 setPending(true);
               },
               onSuccess: () => {
-                router.push("/app");
-                router.refresh();
+                setPending(false);
+                setCaptchaToken(null);
+                setNotice(
+                  "Check your email to verify your account, then sign in. Unverified password accounts cannot be linked to Google.",
+                );
               },
               onError: (ctx) => {
                 setError(ctx.error.message ?? "Sign up failed.");
@@ -149,6 +152,11 @@ export default function SignupPage() {
         {error ? (
           <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300">
             {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 font-mono text-[11px] text-emerald-200">
+            {notice}
           </p>
         ) : null}
 

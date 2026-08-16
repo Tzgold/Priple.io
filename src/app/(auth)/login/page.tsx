@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppleIcon, GoogleIcon } from "@/components/auth/AuthMark";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { AuthTurnstile } from "@/components/auth/AuthTurnstile";
 import { signIn } from "@/lib/auth-client";
 
 function SocialButton({
@@ -35,6 +36,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRequired = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -83,11 +86,17 @@ export default function LoginPage() {
         onSubmit={async (event) => {
           event.preventDefault();
           setError(null);
-          setPending(true);
 
           const form = event.currentTarget;
           const email = (form.elements.namedItem("email") as HTMLInputElement).value;
           const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+          if (captchaRequired && !captchaToken) {
+            setError("Complete the captcha check before continuing.");
+            return;
+          }
+
+          setPending(true);
 
           await signIn.email(
             {
@@ -96,6 +105,11 @@ export default function LoginPage() {
               callbackURL: "/app",
             },
             {
+              headers: captchaToken
+                ? {
+                    "x-captcha-response": captchaToken,
+                  }
+                : undefined,
               onSuccess: () => {
                 router.push("/app");
                 router.refresh();
@@ -103,6 +117,7 @@ export default function LoginPage() {
               onError: (ctx) => {
                 setError(ctx.error.message ?? "Sign in failed.");
                 setPending(false);
+                setCaptchaToken(null);
               },
             },
           );
@@ -147,6 +162,12 @@ export default function LoginPage() {
             className="auth-input mt-2"
           />
         </label>
+
+        <AuthTurnstile
+          onToken={setCaptchaToken}
+          onExpire={() => setCaptchaToken(null)}
+          onError={() => setCaptchaToken(null)}
+        />
 
         <button type="submit" className="auth-submit mt-2 disabled:opacity-60" disabled={pending}>
           {pending ? "Signing in…" : "Sign In"}
