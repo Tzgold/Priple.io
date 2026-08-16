@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { captcha } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
-import { createAuthDatabase } from "@/lib/db";
+import { createAuthDatabase, getPgPool } from "@/lib/db";
 import { sendResetPasswordEmail, sendVerificationEmail } from "@/lib/email";
 
 function isProd() {
@@ -35,6 +35,33 @@ function assertAuthSecrets() {
 }
 
 assertAuthSecrets();
+
+/** Better Auth OAuth state / email verification storage (shared across serverless). */
+async function ensureAuthVerificationTable() {
+  try {
+    await getPgPool().query(`
+      CREATE TABLE IF NOT EXISTS verification (
+        id text PRIMARY KEY,
+        identifier text NOT NULL,
+        value text NOT NULL,
+        "expiresAt" timestamptz NOT NULL,
+        "createdAt" timestamptz DEFAULT now(),
+        "updatedAt" timestamptz DEFAULT now()
+      )
+    `);
+    await getPgPool().query(`
+      CREATE INDEX IF NOT EXISTS verification_identifier_idx
+      ON verification (identifier)
+    `);
+  } catch (error) {
+    console.error(
+      "[auth] verification table ensure failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+void ensureAuthVerificationTable();
 
 const googleConfigured = Boolean(
   process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
@@ -73,7 +100,6 @@ const trustedOrigins = Array.from(
       process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
         : null,
-      // Localhost only outside production — avoids trusting http://localhost in prod auth.
       isProd() ? null : "http://localhost:3000",
     ].filter(Boolean) as string[],
   ),
@@ -83,6 +109,10 @@ export const auth = betterAuth({
   database: createAuthDatabase(),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: baseUrl,
+  // Land OAuth failures on login with a readable message (not the marketing home).
+  onAPIError: {
+    errorURL: "/login",
+  },
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: true,
@@ -106,10 +136,17 @@ export const auth = betterAuth({
     },
   },
   account: {
+    // Persist OAuth state in Postgres so serverless instances share it.
+    storeStateStrategy: "database",
+    /**
+     * `.vercel.app` is on the public suffix list — browsers often drop/block the
+     * secondary OAuth state cookie. State is still validated via the DB record.
+     * Prefer a custom domain later, then you can set this back to false.
+     */
+    skipStateCookieCheck: true,
     accountLinking: {
       enabled: true,
       trustedProviders: ["google"],
-      // Blocks OAuth attach to unverified password accounts (pre-account hijack).
       requireLocalEmailVerified: true,
     },
   },
@@ -123,6 +160,15 @@ export const auth = betterAuth({
       }
     : {},
   trustedOrigins,
+  advanced: {
+    useSecureCookies: isProd(),
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: isProd(),
+      path: "/",
+      httpOnly: true,
+    },
+  },
   rateLimit: {
     enabled: true,
     window: 60,
