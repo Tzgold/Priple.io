@@ -6,12 +6,18 @@ import {
   looksLikeAddress,
   searchTokens,
 } from "@/lib/geckoterminal";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 
 export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await limitUserRoute(session.user.id, "market:token", 40);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const url = new URL(request.url);

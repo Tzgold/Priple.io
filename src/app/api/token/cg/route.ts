@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Candle } from "@/lib/geckoterminal";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 
 type CgMarketChart = {
@@ -20,6 +21,11 @@ export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await limitUserRoute(session.user.id, "market:token", 40);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const id = new URL(request.url).searchParams.get("id");

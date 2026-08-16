@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { fetchScreenerTokens } from "@/lib/coingecko";
 import { fetchTrendingBoard } from "@/lib/geckoterminal";
 import { MAJOR_TOKEN_ROUTES, type BoardToken } from "@/lib/token-routes";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 
 export async function GET() {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await limitUserRoute(session.user.id, "market:screener", 20);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const [{ tokens, live }, trending] = await Promise.all([

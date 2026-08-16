@@ -1,24 +1,8 @@
 import { NextResponse } from "next/server";
 import { listWallets } from "@/lib/desk-db";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 import { fetchMultiWalletChartMarks } from "@/lib/wallet-dossier";
-
-/** Simple per-user in-memory throttle for marks (shared Alchemy budget). */
-const marksHits = new Map<string, { count: number; resetAt: number }>();
-
-function allowMarksRequest(userId: string) {
-  const now = Date.now();
-  const windowMs = 60_000;
-  const max = 20;
-  const row = marksHits.get(userId);
-  if (!row || now > row.resetAt) {
-    marksHits.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (row.count >= max) return false;
-  row.count += 1;
-  return true;
-}
 
 export async function GET(request: Request) {
   const session = await requireSession();
@@ -26,11 +10,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!allowMarksRequest(session.user.id)) {
-    return NextResponse.json(
-      { error: "Too many mark requests — wait a minute", marks: [] },
-      { status: 429 },
-    );
+  const limited = await limitUserRoute(session.user.id, "alchemy:marks", 20);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const url = new URL(request.url);

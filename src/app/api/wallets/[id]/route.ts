@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CURATED_SMART_MONEY } from "@/lib/curated-wallets";
 import { deleteWallet, getWallet } from "@/lib/desk-db";
 import { mockMoves, mockWallets } from "@/lib/mock/data";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 import {
   buildDemoWalletDossier,
@@ -14,6 +15,11 @@ export async function GET(_request: Request, { params }: Params) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await limitUserRoute(session.user.id, "alchemy:dossier", 15);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const { id } = await params;

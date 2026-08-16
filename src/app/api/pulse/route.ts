@@ -4,6 +4,7 @@ import { CURATED_SMART_MONEY, PERSONAL_PULSE_THRESHOLD } from "@/lib/curated-wal
 import { listWallets } from "@/lib/desk-db";
 import { mockMoves } from "@/lib/mock/data";
 import { syncAlertsFromPulse } from "@/lib/pulse-alerts";
+import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG } from "@/lib/token-routes";
 
@@ -47,6 +48,11 @@ export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limited = await limitUserRoute(session.user.id, "alchemy:pulse", 10);
+  if (!limited.ok) {
+    return rateLimitJson(limited.retryAfterSec);
   }
 
   const url = new URL(request.url);
