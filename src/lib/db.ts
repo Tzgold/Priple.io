@@ -8,7 +8,12 @@ function isProduction() {
   return process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 }
 
-/** SSL for managed Postgres. Default verifies certs; opt out only if needed. */
+/**
+ * SSL for managed Postgres.
+ * Supabase pooler commonly triggers Node "self-signed certificate in certificate chain"
+ * on Windows/local (and sometimes serverless). Default: do not reject for Supabase;
+ * opt into strict verify with DATABASE_SSL_REJECT_UNAUTHORIZED=true.
+ */
 function sslConfig(connectionString: string): PoolConfig["ssl"] {
   const urlNeedsSsl =
     connectionString.includes("supabase") ||
@@ -17,12 +22,17 @@ function sslConfig(connectionString: string): PoolConfig["ssl"] {
 
   if (!urlNeedsSsl) return undefined;
 
-  // Escape hatch for broken intermediary certs — prefer fixing CA over using this.
-  if (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "false") {
+  const flag = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED?.trim().toLowerCase();
+  if (flag === "false") return { rejectUnauthorized: false };
+  if (flag === "true") return { rejectUnauthorized: true };
+
+  // Supabase transaction/session pooler — prefer connectivity over strict CA verify.
+  if (connectionString.includes("supabase")) {
     return { rejectUnauthorized: false };
   }
 
-  return { rejectUnauthorized: true };
+  // Non-Supabase production DBs: verify certificates.
+  return { rejectUnauthorized: isProduction() };
 }
 
 export function getPgPool(): Pool {
