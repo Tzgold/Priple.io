@@ -1,17 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, MessageCircle, Radio } from "lucide-react";
+import { Copy, ExternalLink, Globe, MessageCircle, Star } from "lucide-react";
 import { TokenCandleChart } from "@/components/app/TokenCandleChart";
+import { DexScreenerChart } from "@/components/app/DexScreenerChart";
 import { TradingViewAdvancedChart } from "@/components/app/TradingViewAdvancedChart";
 import { TokenMark } from "@/components/app/TokenMark";
 import { cn } from "@/lib/cn";
+import { useDesk } from "@/lib/app-store";
 import { aggregateCandles, estimateMarketCap, toMarketCapCandles } from "@/lib/candle-math";
+import {
+  dexScreenerPairPageUrl,
+  fetchDexScreenerEnrichment,
+  toDexScreenerChain,
+} from "@/lib/dexscreener";
 import type { Candle, TokenDesk, TokenTrade } from "@/lib/geckoterminal";
 import { TV_SYMBOL_BY_CG } from "@/lib/token-routes";
+import type { WalletChartMark } from "@/lib/wallet-dossier";
+import { walletAvatarUrl } from "@/lib/wallet-avatar";
 
 type IntervalKey = "1m" | "15m" | "1H" | "4H" | "1D";
 type ChartScale = "price" | "mcap";
+type ChartMode = "tradingview" | "dexscreener" | "lightweight";
 
 const intervals: Record<IntervalKey, { tv: string }> = {
   "1m": { tv: "1" },
@@ -82,11 +92,23 @@ export function TokenDeskView({
   network,
   address,
   compact = false,
+  trackWallet = null,
+  trackWalletLabel = null,
+  trackFocusTime = null,
+  trackSide = null,
+  trackWhy = null,
 }: {
   network: string;
   address: string;
   compact?: boolean;
+  /** Full wallet address to overlay buy/sell markers on the Priple chart. */
+  trackWallet?: string | null;
+  trackWalletLabel?: string | null;
+  trackFocusTime?: number | null;
+  trackSide?: "buy" | "sell" | null;
+  trackWhy?: string | null;
 }) {
+  const { isTokenWatched, toggleWatchToken, trackedWallets } = useDesk();
   const [interval, setIntervalKey] = useState<IntervalKey>("15m");
   const [token, setToken] = useState<LoadedDesk | null>(null);
   const [base1m, setBase1m] = useState<Candle[]>([]);
@@ -99,14 +121,24 @@ export function TokenDeskView({
   const [error, setError] = useState<string | null>(null);
   const [candleNote, setCandleNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [chartMode, setChartMode] = useState<"dex" | "tradingview">("dex");
+  const [chartMode, setChartMode] = useState<ChartMode>("dexscreener");
   const [chartScale, setChartScale] = useState<ChartScale>("price");
+  const [dsPairAddress, setDsPairAddress] = useState<string | null>(null);
+  const [dsPairUrl, setDsPairUrl] = useState<string | null>(null);
+  const [walletMarks, setWalletMarks] = useState<WalletChartMark[]>([]);
+  const [marksNote, setMarksNote] = useState<string | null>(null);
 
   const cfg = intervals[interval];
   const tvSymbol =
     (token?.coingeckoId && TV_SYMBOL_BY_CG[token.coingeckoId]) ||
     (network === "coingecko" ? TV_SYMBOL_BY_CG[address] : null) ||
     null;
+
+  const canDexScreener =
+    network !== "coingecko" && Boolean(toDexScreenerChain(network));
+
+  const dexChartAddress =
+    dsPairAddress || token?.poolAddress || (network !== "coingecko" ? address : null);
 
   const mcap = useMemo(
     () =>
@@ -143,10 +175,107 @@ export function TokenDeskView({
     return chartScale === "mcap" ? toMarketCapCandles(series, chartSupply) : series;
   }, [network, cgCandles, base1m, base1h, interval, chartScale, chartSupply]);
 
+  const trackingActive = Boolean(trackWallet);
+
   useEffect(() => {
+    if (trackingActive) {
+      setChartMode("lightweight");
+      return;
+    }
     if (tvSymbol) setChartMode("tradingview");
-    else setChartMode("dex");
-  }, [tvSymbol, network, address]);
+    else if (canDexScreener) setChartMode("dexscreener");
+    else setChartMode("lightweight");
+  }, [tvSymbol, canDexScreener, network, address, trackingActive]);
+
+  useEffect(() => {
+    if (!trackWallet || network === "coingecko") {
+      setWalletMarks([]);
+      setMarksNote(null);
+      return;
+    }
+
+    let cancelled = false;
+    const tokenAddr = address;
+    void (async () => {
+      try {
+        const walletList = trackedWallets
+          .map((w) => ({
+            address: (w.fullAddress || w.address || "").trim(),
+            label: w.label,
+          }))
+          .filter((w) => w.address.length >= 8);
+
+        if (trackWallet && !walletList.some((w) => w.address.toLowerCase() === trackWallet.toLowerCase())) {
+          walletList.unshift({
+            address: trackWallet,
+            label: trackWalletLabel || "Wallet",
+          });
+        }
+
+        const labels: Record<string, string> = {};
+        for (const w of walletList) {
+          if (w.label) labels[w.address.toLowerCase()] = w.label;
+        }
+        if (trackWalletLabel && trackWallet) {
+          labels[trackWallet.toLowerCase()] = trackWalletLabel;
+        }
+
+        const qs = new URLSearchParams({
+          token: tokenAddr,
+          wallets: walletList.map((w) => w.address).join(","),
+          labels: JSON.stringify(labels),
+        });
+        if (trackWallet) qs.set("wallet", trackWallet);
+        if (trackWalletLabel) qs.set("label", trackWalletLabel);
+        if (trackFocusTime != null) qs.set("at", String(trackFocusTime));
+        if (trackSide) qs.set("side", trackSide);
+        if (token?.symbol) qs.set("asset", token.symbol);
+
+        const res = await fetch(`/api/wallets/marks?${qs.toString()}`, {
+          credentials: "include",
+        });
+        const data = (await res.json()) as {
+          marks?: WalletChartMark[];
+          error?: string;
+        };
+        if (cancelled) return;
+        const next = (data.marks ?? []).map((mark) => ({
+          ...mark,
+          walletLabel: mark.walletLabel || labels[(mark.walletAddress || "").toLowerCase()] || trackWalletLabel || null,
+          avatarUrl:
+            mark.avatarUrl ||
+            walletAvatarUrl(mark.walletAddress || trackWallet || "wallet", mark.walletLabel),
+        }));
+        setWalletMarks(next);
+        const walletCount = new Set(
+          next.map((m) => (m.walletAddress || "").toLowerCase()).filter(Boolean),
+        ).size;
+        setMarksNote(
+          next.length > 0
+            ? `${next.length} chart mark${next.length === 1 ? "" : "s"} · ${walletCount} tracked wallet${walletCount === 1 ? "" : "s"}`
+            : "No matching transfers yet — click a buy/sell row from the wallet dossier to seed a mark, or wait for Alchemy history.",
+        );
+      } catch {
+        if (!cancelled) {
+          setWalletMarks([]);
+          setMarksNote("Could not load wallet markers");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    trackWallet,
+    trackWalletLabel,
+    trackFocusTime,
+    trackSide,
+    network,
+    address,
+    trackedWallets,
+    token?.symbol,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +288,8 @@ export function TokenDeskView({
       setBase1m([]);
       setBase1h([]);
       setCgCandles([]);
+      setDsPairAddress(null);
+      setDsPairUrl(null);
       setChartScale("price");
       try {
         if (network === "coingecko") {
@@ -203,44 +334,148 @@ export function TokenDeskView({
           timeframe: "minute",
           aggregate: "1",
         });
-        const res = await fetch(`/api/token?${qs.toString()}`, {
-          credentials: "include",
-        });
+        const res = await fetchWithRetry(`/api/token?${qs.toString()}`);
         const data = (await res.json()) as {
           token?: TokenDesk;
           candles?: Candle[];
           trades?: TokenTrade[];
           error?: string;
+          rateLimited?: boolean;
         };
         if (!res.ok) {
-          if (!cancelled) setError(data.error || "Failed to load");
+          if (!cancelled) {
+            if (data.rateLimited || res.status === 429) {
+              setError(null);
+              setCandleNote("Market data is busy — retrying locally. Tap Retry if the chart stays empty.");
+              // Still try Dex enrichment so header + Dex chart work without GT candles.
+              try {
+                const enrich = await fetchDexScreenerEnrichment(address, network);
+                if (!cancelled && enrich) {
+                  setDsPairAddress(enrich.pairAddress);
+                  setDsPairUrl(enrich.pairUrl);
+                  setToken({
+                    network,
+                    address,
+                    name: address.slice(0, 8),
+                    symbol: "TOKEN",
+                    imageUrl: enrich.imageUrl,
+                    priceUsd: enrich.priceUsd,
+                    marketCapUsd: enrich.marketCapUsd,
+                    fdvUsd: enrich.fdvUsd,
+                    volume24hUsd: enrich.volume24hUsd,
+                    liquidityUsd: enrich.liquidityUsd,
+                    decimals: null,
+                    supply: null,
+                    coingeckoId: null,
+                    poolAddress: enrich.pairAddress,
+                    poolName: null,
+                    priceChange24h: enrich.priceChange24h,
+                    socials: enrich.socials,
+                    info: null,
+                    depth: {
+                      liquidityUsd: enrich.liquidityUsd,
+                      volume24hUsd: enrich.volume24hUsd,
+                      fdvUsd: enrich.fdvUsd,
+                      marketCapUsd: enrich.marketCapUsd,
+                      depthRatio: null,
+                    },
+                  } as LoadedDesk);
+                  if (!trackingActive) setChartMode("dexscreener");
+                } else {
+                  setError(data.error || "Market data is busy — wait a second and try again");
+                }
+              } catch {
+                setError(data.error || "Market data is busy — wait a second and try again");
+              }
+            } else {
+              setError(data.error || "Failed to load");
+            }
+          }
           return;
         }
         if (cancelled) return;
-        setToken(data.token ?? null);
+
+        let nextToken = data.token ?? null;
+
+        // Fill missing mcap / liq / vol / socials from DexScreener so the header matches a real desk.
+        try {
+          const enrich = await fetchDexScreenerEnrichment(address, network);
+          if (!cancelled && enrich && nextToken) {
+            setDsPairAddress(enrich.pairAddress);
+            setDsPairUrl(enrich.pairUrl);
+            const existingSocials =
+              (nextToken as LoadedDesk).info?.socials ||
+              (nextToken as LoadedDesk).socials ||
+              {};
+            const mergedSocials: DeskSocials = {
+              websites:
+                existingSocials.websites && existingSocials.websites.length > 0
+                  ? existingSocials.websites
+                  : enrich.socials.websites,
+              twitter: existingSocials.twitter || enrich.socials.twitter,
+              telegram: existingSocials.telegram || enrich.socials.telegram,
+              discord: existingSocials.discord || enrich.socials.discord,
+            };
+            nextToken = {
+              ...nextToken,
+              priceUsd: nextToken.priceUsd ?? enrich.priceUsd,
+              marketCapUsd: nextToken.marketCapUsd ?? enrich.marketCapUsd,
+              fdvUsd: nextToken.fdvUsd ?? enrich.fdvUsd,
+              volume24hUsd: nextToken.volume24hUsd ?? enrich.volume24hUsd,
+              liquidityUsd: nextToken.liquidityUsd ?? enrich.liquidityUsd,
+              priceChange24h: nextToken.priceChange24h ?? enrich.priceChange24h,
+              poolAddress: nextToken.poolAddress || enrich.pairAddress,
+              imageUrl: nextToken.imageUrl || enrich.imageUrl,
+              socials: mergedSocials,
+              info: nextToken.info
+                ? {
+                    ...nextToken.info,
+                    socials: {
+                      websites: mergedSocials.websites || [],
+                      twitter: mergedSocials.twitter ?? null,
+                      telegram: mergedSocials.telegram ?? null,
+                      discord: mergedSocials.discord ?? null,
+                    },
+                  }
+                : nextToken.info,
+            } as LoadedDesk;
+          } else if (!cancelled && enrich?.pairAddress) {
+            setDsPairAddress(enrich.pairAddress);
+            setDsPairUrl(enrich.pairUrl);
+          }
+        } catch {
+          // Keep GT-only desk.
+        }
+
+        if (cancelled) return;
+        setToken(nextToken);
         setTrades(data.trades ?? []);
         setBase1m(data.candles ?? []);
         setIntervalKey("15m");
 
-        const pool = data.token?.poolAddress;
+        const pool = nextToken?.poolAddress;
         if (pool) {
+          // Stagger hour series so we don't stack 429s with the desk request.
+          await new Promise((r) => window.setTimeout(r, 900));
+          if (cancelled) return;
           const hourQs = new URLSearchParams({
-            network: data.token!.network,
+            network: nextToken!.network,
             pool,
             timeframe: "hour",
             aggregate: "1",
           });
           try {
-            const hourRes = await fetch(`/api/token/ohlcv?${hourQs.toString()}`, {
-              credentials: "include",
-            });
+            const hourRes = await fetchWithRetry(`/api/token/ohlcv?${hourQs.toString()}`);
             const hourData = (await hourRes.json()) as {
               candles?: Candle[];
               error?: string;
+              rateLimited?: boolean;
             };
             if (!cancelled) {
               if (hourRes.ok) setBase1h(hourData.candles ?? []);
-              else if (hourData.error) setCandleNote(hourData.error);
+              else if (hourData.rateLimited || hourRes.status === 429) {
+                setCandleNote("Higher timeframes paused — market data busy. Tap Retry.");
+              } else if (hourData.error) setCandleNote(hourData.error);
             }
           } catch {
             // Keep 1m base; higher TFs still work via aggregation.
@@ -264,6 +499,53 @@ export function TokenDeskView({
 
   const loading = loadingMeta || loadingCandles;
 
+  async function fetchWithRetry(url: string, attempts = 3) {
+    let lastRes: Response | null = null;
+    for (let i = 0; i < attempts; i += 1) {
+      const res = await fetch(url, { credentials: "include" });
+      lastRes = res;
+      if (res.status !== 429) return res;
+      await new Promise((r) => window.setTimeout(r, 700 * (i + 1)));
+    }
+    return lastRes!;
+  }
+
+  async function retryCandles() {
+    if (!network || !address || network === "coingecko") return;
+    setCandleNote(null);
+    setLoadingCandles(true);
+    try {
+      const qs = new URLSearchParams({
+        network,
+        address,
+        timeframe: "minute",
+        aggregate: "1",
+      });
+      const res = await fetchWithRetry(`/api/token?${qs.toString()}`);
+      const data = (await res.json()) as {
+        candles?: Candle[];
+        error?: string;
+        rateLimited?: boolean;
+      };
+      if (!res.ok) {
+        setCandleNote(
+          data.rateLimited || res.status === 429
+            ? "Market data is busy — tap Retry in a moment"
+            : data.error || "Could not refresh candles",
+        );
+        return;
+      }
+      setBase1m(data.candles ?? []);
+      if ((data.candles?.length || 0) === 0) {
+        setCandleNote("No candles yet — Dex chart may still have live data.");
+      }
+    } catch {
+      setCandleNote("Could not refresh candles");
+    } finally {
+      setLoadingCandles(false);
+    }
+  }
+
   const changeClass = useMemo(() => {
     const value = token?.priceChange24h ?? 0;
     if (value > 0) return "text-teal-400";
@@ -272,6 +554,13 @@ export function TokenDeskView({
   }, [token?.priceChange24h]);
 
   const socials = token?.info?.socials || token?.socials || null;
+  const watched = isTokenWatched(network, address);
+  const dexPageUrl =
+    dsPairUrl ||
+    dexScreenerPairPageUrl(
+      token?.network || network,
+      dsPairAddress || token?.poolAddress || (network !== "coingecko" ? address : "") || "",
+    );
 
   async function copyAddress() {
     try {
@@ -291,18 +580,16 @@ export function TokenDeskView({
         </p>
       ) : null}
 
-      <section className="rounded-[20px] border border-white/[0.08] bg-black/30 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="rounded-[20px] border border-white/[0.08] bg-[#0a0a0c] p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <TokenMark symbol={token?.symbol || "ETH"} imageUrl={token?.imageUrl} size={44} />
+            <TokenMark symbol={token?.symbol || "ETH"} imageUrl={token?.imageUrl} size={48} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate font-sans text-xl font-semibold text-white">
+                <h2 className="truncate font-sans text-xl font-semibold tracking-tight text-white sm:text-2xl">
                   {token?.name || "…"}
                 </h2>
-                <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] uppercase text-zinc-400">
-                  {token?.symbol || "—"}
-                </span>
+                <span className="font-mono text-[12px] text-zinc-500">{token?.symbol || "—"}</span>
               </div>
               <button
                 type="button"
@@ -313,62 +600,155 @@ export function TokenDeskView({
                 <Copy className="h-3 w-3" />
                 {copied ? <span className="text-teal-400">copied</span> : null}
               </button>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 {socials?.websites?.[0] ? (
-                  <SocialChip href={socials.websites[0]} label="Website" icon={<Globe className="h-3 w-3" />} />
+                  <IconLink href={socials.websites[0]} title="Website">
+                    <Globe className="h-3.5 w-3.5" />
+                  </IconLink>
                 ) : null}
                 {socials?.twitter ? (
-                  <SocialChip
-                    href={`https://x.com/${socials.twitter}`}
-                    label={`@${socials.twitter}`}
-                    icon={<Radio className="h-3 w-3" />}
-                  />
+                  <IconLink href={`https://x.com/${socials.twitter}`} title={`@${socials.twitter}`}>
+                    <XGlyph />
+                  </IconLink>
                 ) : null}
                 {socials?.telegram ? (
-                  <SocialChip
-                    href={`https://t.me/${socials.telegram}`}
-                    label="Telegram"
-                    icon={<MessageCircle className="h-3 w-3" />}
-                  />
+                  <IconLink href={`https://t.me/${socials.telegram}`} title="Telegram">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </IconLink>
                 ) : null}
                 {socials?.discord ? (
-                  <SocialChip href={socials.discord} label="Discord" icon={<MessageCircle className="h-3 w-3" />} />
+                  <IconLink href={socials.discord} title="Discord">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </IconLink>
                 ) : null}
-                <SocialChip
-                  href={explorerTokenUrl(network, address)}
-                  label="Explorer"
-                  icon={<ExternalLink className="h-3 w-3" />}
-                />
+                <IconLink href={explorerTokenUrl(network, address)} title="Explorer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </IconLink>
+                {dexPageUrl ? (
+                  <IconLink href={dexPageUrl} title="DexScreener">
+                    <DexGlyph />
+                  </IconLink>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() =>
+                    toggleWatchToken({
+                      network: token?.network || network,
+                      address: token?.address || address,
+                      symbol: token?.symbol || "???",
+                      name: token?.name || "Token",
+                      imageUrl: token?.imageUrl || null,
+                    })
+                  }
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
+                    watched
+                      ? "border-amber-400/50 bg-amber-400/15 text-amber-200"
+                      : "border-white/10 text-zinc-400 hover:border-white/25 hover:text-white",
+                  )}
+                  title={watched ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Star className={cn("h-3.5 w-3.5", watched && "fill-current")} />
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:min-w-[560px]">
-            <Metric label={mcap.label} value={money(mcap.value)} />
-            <Metric label="Price" value={money(token?.priceUsd)} />
-            <Metric
-              label="24h"
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-x-6">
+            <HeaderStat label="Market cap" value={money(mcap.value)} />
+            <HeaderStat
+              label="Price"
+              value={money(token?.priceUsd)}
+              emphasize
+            />
+            <HeaderStat
+              label="24H change"
               value={
                 token?.priceChange24h == null
                   ? "—"
-                  : `${token.priceChange24h > 0 ? "+" : ""}${token.priceChange24h.toFixed(2)}%`
+                  : `${token.priceChange24h > 0 ? "▲ " : token.priceChange24h < 0 ? "▼ " : ""}${Math.abs(token.priceChange24h).toFixed(2)}%`
               }
               className={changeClass}
             />
-            <Metric label="24h vol" value={money(token?.volume24hUsd)} />
-            <Metric label="Liquidity" value={money(token?.liquidityUsd)} />
+            <HeaderStat label="24H Vol." value={money(token?.volume24hUsd)} />
+            <HeaderStat label="Liquidity" value={money(token?.liquidityUsd)} />
           </div>
         </div>
       </section>
+
+      {trackingActive ? (
+        <div className="rounded-[18px] border border-teal-500/25 bg-teal-500/[0.08] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={walletAvatarUrl(trackWallet || "wallet", trackWalletLabel)}
+              alt=""
+              className="h-9 w-9 rounded-full border border-teal-400/40 object-cover"
+              referrerPolicy="no-referrer"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-teal-300/80">
+                Wallet tracking
+              </p>
+              <p className="mt-0.5 font-sans text-[14px] font-medium text-white">
+                {trackWalletLabel || shortAddr(trackWallet || "")}
+                {trackedWallets.length > 1
+                  ? ` · + overlays from ${Math.min(trackedWallets.length, 12)} tracked desks`
+                  : " on this coin"}
+              </p>
+              <p className="mt-1 font-mono text-[11px] leading-5 text-teal-100/80">
+                {trackWhy ||
+                  "Profile avatars mark buys (teal) and sells (rose) on the Priple chart."}{" "}
+                Chart locked to Priple while tracking so markers can render.
+              </p>
+              {marksNote ? (
+                <p className="mt-2 font-mono text-[11px] text-zinc-400">{marksNote}</p>
+              ) : null}
+            </div>
+          </div>
+          {walletMarks.length > 0 ? (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {walletMarks.slice(-10).map((mark) => (
+                <li
+                  key={`${mark.walletAddress}-${mark.time}-${mark.side}-${mark.hash || mark.text}`}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-mono text-[10px]",
+                    mark.side === "buy"
+                      ? "border-teal-500/30 text-teal-300"
+                      : "border-rose-500/30 text-rose-300",
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={
+                      mark.avatarUrl ||
+                      walletAvatarUrl(mark.walletAddress || trackWallet || "w", mark.walletLabel)
+                    }
+                    alt=""
+                    className="h-4 w-4 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  {mark.walletLabel || shortAddr(mark.walletAddress || "")} · {mark.side}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#050506]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-              Chart · {chartMode === "tradingview" ? "TradingView" : "DEX"}
+              Chart ·{" "}
+              {chartMode === "tradingview"
+                ? "TradingView"
+                : chartMode === "dexscreener"
+                  ? "DexScreener"
+                  : "Priple"}
             </p>
-            {tvSymbol ? (
-              <div className="flex gap-1 rounded-full border border-white/10 p-0.5">
+            <div className="flex gap-1 rounded-full border border-white/10 p-0.5">
+              {!trackingActive && tvSymbol ? (
                 <button
                   type="button"
                   onClick={() => setChartMode("tradingview")}
@@ -381,19 +761,35 @@ export function TokenDeskView({
                 >
                   TradingView
                 </button>
+              ) : null}
+              {!trackingActive && canDexScreener ? (
                 <button
                   type="button"
-                  onClick={() => setChartMode("dex")}
+                  onClick={() => setChartMode("dexscreener")}
                   className={cn(
                     "rounded-full px-2.5 py-1 font-mono text-[10px]",
-                    chartMode === "dex" ? "bg-white text-[#09090b]" : "text-zinc-500 hover:text-white",
+                    chartMode === "dexscreener"
+                      ? "bg-white text-[#09090b]"
+                      : "text-zinc-500 hover:text-white",
                   )}
                 >
-                  DEX
+                  DexScreener
                 </button>
-              </div>
-            ) : null}
-            {chartMode === "dex" && canMcapChart ? (
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setChartMode("lightweight")}
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-mono text-[10px]",
+                  chartMode === "lightweight"
+                    ? "bg-white text-[#09090b]"
+                    : "text-zinc-500 hover:text-white",
+                )}
+              >
+                Priple{trackingActive ? " · tracking" : ""}
+              </button>
+            </div>
+            {chartMode === "lightweight" && canMcapChart ? (
               <div className="flex gap-1 rounded-full border border-white/10 p-0.5">
                 <button
                   type="button"
@@ -422,34 +818,54 @@ export function TokenDeskView({
               </div>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(intervals) as IntervalKey[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setIntervalKey(key)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 font-mono text-[11px]",
-                  interval === key
-                    ? "bg-white text-[#09090b]"
-                    : "text-zinc-500 hover:bg-white/[0.04] hover:text-white",
-                )}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
+          {chartMode === "tradingview" || chartMode === "lightweight" ? (
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(intervals) as IntervalKey[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setIntervalKey(key)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 font-mono text-[11px]",
+                    interval === key
+                      ? "bg-white text-[#09090b]"
+                      : "text-zinc-500 hover:bg-white/[0.04] hover:text-white",
+                  )}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="font-mono text-[10px] text-zinc-600">
+              Use chart toolbar for intervals · Price / MCap
+            </p>
+          )}
         </div>
         {candleNote ? (
-          <p className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 font-mono text-[11px] text-amber-200">
-            {candleNote}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
+            <p className="font-mono text-[11px] text-amber-200">{candleNote}</p>
+            <button
+              type="button"
+              onClick={() => void retryCandles()}
+              className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 font-mono text-[10px] text-amber-100 hover:bg-amber-400/20"
+            >
+              Retry
+            </button>
+          </div>
         ) : null}
         {chartMode === "tradingview" && tvSymbol ? (
           <TradingViewAdvancedChart
             key={`${tvSymbol}-${interval}`}
             symbol={tvSymbol}
             interval={cfg.tv}
+          />
+        ) : chartMode === "dexscreener" && dexChartAddress ? (
+          <DexScreenerChart
+            key={`${network}-${dexChartAddress}`}
+            network={token?.network || network}
+            pairOrTokenAddress={dexChartAddress}
+            heightClass={compact ? "h-[420px] w-full sm:h-[520px]" : "h-[460px] w-full sm:h-[560px]"}
           />
         ) : loadingCandles && candles.length === 0 ? (
           <p className="px-4 py-20 text-center font-mono text-[12px] text-zinc-600">
@@ -461,8 +877,10 @@ export function TokenDeskView({
           </p>
         ) : (
           <TokenCandleChart
-            key={`${network}-${address}-${interval}-${candles[0]?.time ?? 0}-${candles.length}`}
+            key={`${network}-${address}-${interval}-${candles[0]?.time ?? 0}-${candles.length}-${walletMarks.length}`}
             candles={candles}
+            marks={walletMarks}
+            focusTime={trackFocusTime}
             heightClass={compact ? "h-[320px] w-full sm:h-[380px]" : "h-[380px] w-full sm:h-[460px]"}
           />
         )}
@@ -615,25 +1033,69 @@ export function TokenDeskView({
   );
 }
 
-function SocialChip({
+function IconLink({
   href,
-  label,
-  icon,
+  title,
+  children,
 }: {
   href: string;
-  label: string;
-  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
 }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 font-mono text-[10px] text-zinc-300 hover:border-white/20 hover:text-white"
+      title={title}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-zinc-400 transition-colors hover:border-white/25 hover:text-white"
     >
-      {icon}
-      {label}
+      {children}
     </a>
+  );
+}
+
+function HeaderStat({
+  label,
+  value,
+  className,
+  emphasize,
+}: {
+  label: string;
+  value: React.ReactNode;
+  className?: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="min-w-[88px]">
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+      <div
+        className={cn(
+          "mt-1 truncate font-mono text-[13px] font-medium text-white sm:text-[14px]",
+          emphasize && "rounded-md bg-white/[0.06] px-2 py-0.5",
+          className,
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function XGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+    </svg>
+  );
+}
+
+function DexGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z" />
+      <path d="M12 12 4 7.5M12 12l8-4.5M12 12v9" />
+    </svg>
   );
 }
 
