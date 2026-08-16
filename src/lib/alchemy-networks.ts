@@ -141,6 +141,26 @@ export function alchemyRpcUrlFor(chainOrNetwork: string): string | null {
   return `https://${ALCHEMY_HOST[chain]}.g.alchemy.com/v2/${key}`;
 }
 
+/** Human-readable coverage for dossier / add-wallet UX. */
+export function alchemyCoverageNote(chainOrNetwork: string): {
+  live: boolean;
+  chain: DeskChain | null;
+  message: string | null;
+} {
+  const chain = normalizeDeskChain(chainOrNetwork);
+  if (!chain) {
+    return { live: false, chain: null, message: "Unsupported chain for live Alchemy coverage." };
+  }
+  if (alchemyRpcUrlFor(chain)) {
+    return { live: true, chain, message: null };
+  }
+  return {
+    live: false,
+    chain,
+    message: `No Alchemy RPC configured for ${chain}. Showing demo dossier until ALCHEMY_API_KEY (or ALCHEMY_${chain}_RPC_URL) is set.`,
+  };
+}
+
 export function chainAssetSymbol(chain: string): string {
   const normalized = normalizeDeskChain(chain);
   if (!normalized) return "ETH";

@@ -1,7 +1,12 @@
 import { randomUUID } from "crypto";
 import type { PulseItem } from "@/lib/alchemy-pulse";
 import { getPgPool } from "@/lib/db";
-import type { DeskAlertType } from "@/lib/desk-db";
+import {
+  listAlertRules,
+  listWallets,
+  type AlertRuleRow,
+  type DeskAlertType,
+} from "@/lib/desk-db";
 
 function parseUsd(value: string) {
   const cleaned = value.replace(/[$,\s]/g, "").toUpperCase();
@@ -24,9 +29,110 @@ function severityFor(usd: number) {
   return "info";
 }
 
+async function insertAlertEvent(input: {
+  userId: string;
+  title: string;
+  detail: string;
+  severity: string;
+  alertType: DeskAlertType;
+  fingerprint: string;
+  ruleId?: string | null;
+}) {
+  const pool = getPgPool();
+  const { rowCount } = await pool.query(
+    `INSERT INTO public.alert_events
+       (id, user_id, rule_id, title, detail, severity, alert_type, dismissed, fingerprint)
+     SELECT $1, $2, $3, $4, $5, $6, $7, false, $8
+     WHERE NOT EXISTS (
+       SELECT 1 FROM public.alert_events
+       WHERE user_id = $2 AND fingerprint = $8
+     )`,
+    [
+      randomUUID(),
+      input.userId,
+      input.ruleId ?? null,
+      input.title.slice(0, 160),
+      input.detail.slice(0, 800),
+      input.severity,
+      input.alertType,
+      input.fingerprint.slice(0, 220),
+    ],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+function ruleMatches(
+  rule: AlertRuleRow,
+  item: PulseItem,
+  walletIdByAddress: Map<string, string>,
+) {
+  if (!rule.enabled) return false;
+
+  const side = item.type === "buy" || item.type === "sell" ? item.type : null;
+  if (rule.side !== "any") {
+    if (!side || side !== rule.side) return false;
+  }
+
+  const usd = parseUsd(item.usd);
+  if (usd > 0 && usd < rule.min_usd) return false;
+  if (usd === 0 && rule.min_usd > 0) return false;
+
+  if (rule.wallet_id) {
+    const itemWalletId = walletIdByAddress.get((item.walletAddress || "").toLowerCase());
+    if (!itemWalletId || itemWalletId !== rule.wallet_id) return false;
+  }
+
+  return true;
+}
+
+/** Evaluate user rules against pulse items (wallet + side + min USD). */
+export async function evaluateAlertRulesFromPulse(userId: string, items: PulseItem[]) {
+  const [rules, wallets] = await Promise.all([listAlertRules(userId), listWallets(userId)]);
+  if (rules.length === 0) return 0;
+
+  const walletIdByAddress = new Map(
+    wallets.map((wallet) => [wallet.address.trim().toLowerCase(), wallet.id]),
+  );
+
+  let created = 0;
+  for (const item of items) {
+    if (item.source === "demo") continue;
+    if (!item.hash && !item.id) continue;
+
+    for (const rule of rules) {
+      if (!ruleMatches(rule, item, walletIdByAddress)) continue;
+
+      const usd = parseUsd(item.usd);
+      const fingerprint = [
+        "rule",
+        rule.id,
+        item.hash || item.id,
+        item.walletAddress || item.walletLabel,
+        item.action,
+      ].join(":");
+
+      try {
+        const ok = await insertAlertEvent({
+          userId,
+          ruleId: rule.id,
+          title: rule.title || `${item.walletLabel} ${item.action} ${item.asset}`,
+          detail: `${item.walletLabel} · ${item.amount} ${item.asset} (${item.usd}) · rule ≥ $${Math.round(rule.min_usd).toLocaleString("en-US")} · ${item.time}`,
+          severity: severityFor(usd),
+          alertType: "signal",
+          fingerprint,
+        });
+        if (ok) created += 1;
+      } catch {
+        // Skip transient write issues.
+      }
+    }
+  }
+
+  return created;
+}
+
 /** Persist notable pulse transfers as inbox alerts (idempotent via fingerprint). */
 export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
-  const pool = getPgPool();
   let created = 0;
 
   for (const item of items) {
@@ -34,7 +140,7 @@ export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
     if (!item.hash && !item.id) continue;
 
     const usd = parseUsd(item.usd);
-    // Only meaningful size — avoid noise from dust transfers
+    // Default noise floor when no custom rules fire.
     if (usd > 0 && usd < 25_000) continue;
     if (usd === 0 && item.asset === "ETH") {
       const amount = parseFloat(item.amount.replace(/[kKmM,]/g, "")) || 0;
@@ -47,38 +153,30 @@ export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
       item.hash || item.id,
       item.walletAddress || item.walletLabel,
       item.action,
-    ]
-      .join(":")
-      .slice(0, 220);
+    ].join(":");
 
     const title = `${item.walletLabel} ${item.action.toLowerCase()} ${item.asset}`;
     const detail = `${item.amount} ${item.asset} (${item.usd}) · ${item.time} · from live pulse`;
-    const alertType = alertTypeFor(item);
-    const severity = severityFor(usd);
 
     try {
-      const { rowCount } = await pool.query(
-        `INSERT INTO public.alert_events
-           (id, user_id, title, detail, severity, alert_type, dismissed, fingerprint)
-         SELECT $1, $2, $3, $4, $5, $6, false, $7
-         WHERE NOT EXISTS (
-           SELECT 1 FROM public.alert_events
-           WHERE user_id = $2 AND fingerprint = $7
-         )`,
-        [
-          randomUUID(),
-          userId,
-          title.slice(0, 160),
-          detail.slice(0, 800),
-          severity,
-          alertType,
-          fingerprint,
-        ],
-      );
-      if ((rowCount ?? 0) > 0) created += 1;
+      const ok = await insertAlertEvent({
+        userId,
+        title,
+        detail,
+        severity: severityFor(usd),
+        alertType: alertTypeFor(item),
+        fingerprint,
+      });
+      if (ok) created += 1;
     } catch {
       // Skip transient write issues; pulse still returns.
     }
+  }
+
+  try {
+    created += await evaluateAlertRulesFromPulse(userId, items);
+  } catch {
+    // Rules are best-effort on top of default pulse sync.
   }
 
   return created;

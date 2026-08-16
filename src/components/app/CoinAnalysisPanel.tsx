@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Globe, Radio, Shield } from "lucide-react";
+import { AlertTriangle, Droplets, Globe, Radio, Shield, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { CoinAnalysis } from "@/lib/coin-analysis";
+
+function safeHttpUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
 
 export function CoinAnalysisPanel({
   network,
@@ -51,6 +62,8 @@ export function CoinAnalysisPanel({
     };
   }, [network, address, whyHere]);
 
+  const website = safeHttpUrl(analysis?.social.websites[0]);
+
   return (
     <section className="rounded-[20px] border border-white/[0.08] bg-black/30 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -85,7 +98,7 @@ export function CoinAnalysisPanel({
       ) : null}
 
       {analysis ? (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
           <div className="space-y-3">
             {analysis.whyHere ? (
               <p className="rounded-2xl border border-teal-500/20 bg-teal-500/10 px-3 py-2.5 font-mono text-[12px] text-teal-100">
@@ -100,6 +113,25 @@ export function CoinAnalysisPanel({
                 </li>
               ))}
             </ul>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <StructureCard
+                icon={<Droplets className="h-3.5 w-3.5" />}
+                label="Liquidity"
+                value={analysis.structure.liquidityNote}
+              />
+              <StructureCard
+                icon={<Radio className="h-3.5 w-3.5" />}
+                label="Volume"
+                value={analysis.structure.volumeNote}
+              />
+              <StructureCard
+                icon={<Users className="h-3.5 w-3.5" />}
+                label="Holders"
+                value={analysis.structure.holderNote}
+              />
+            </div>
+
             {analysis.social.description ? (
               <p className="font-mono text-[11px] leading-5 text-zinc-500">
                 {analysis.social.description.slice(0, 280)}
@@ -107,9 +139,9 @@ export function CoinAnalysisPanel({
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              {analysis.social.websites[0] ? (
+              {website ? (
                 <a
-                  href={analysis.social.websites[0]}
+                  href={website}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-zinc-300 hover:text-white"
@@ -119,17 +151,17 @@ export function CoinAnalysisPanel({
               ) : null}
               {analysis.social.twitter ? (
                 <a
-                  href={`https://x.com/${analysis.social.twitter}`}
+                  href={`https://x.com/${encodeURIComponent(analysis.social.twitter.replace(/^@/, ""))}`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-zinc-300 hover:text-white"
                 >
-                  <Radio className="h-3 w-3" /> @{analysis.social.twitter}
+                  <Radio className="h-3 w-3" /> @{analysis.social.twitter.replace(/^@/, "")}
                 </a>
               ) : null}
               {analysis.social.telegram ? (
                 <a
-                  href={`https://t.me/${analysis.social.telegram}`}
+                  href={`https://t.me/${encodeURIComponent(analysis.social.telegram.replace(/^@/, ""))}`}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-zinc-300 hover:text-white"
@@ -146,8 +178,11 @@ export function CoinAnalysisPanel({
               <Mini label="Price" value={analysis.market.priceLabel} />
               <Mini label="24H" value={analysis.market.change24hLabel} />
               <Mini label="Liquidity" value={analysis.market.liquidityLabel} />
+              <Mini label="24H Vol" value={analysis.market.volumeLabel} />
+              <Mini label="Liq / MCap" value={analysis.market.depthLabel || "—"} />
               <Mini label="Holders" value={analysis.holders.countLabel} />
               <Mini label="Top 10" value={analysis.holders.top10Label} />
+              <Mini label="Next 20" value={analysis.holders.next20Label} />
             </div>
             <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2.5">
               <p className="mb-2 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
@@ -179,6 +214,26 @@ function Mini({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2">
       <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">{label}</p>
       <p className="mt-1 truncate font-mono text-[12px] text-zinc-200">{value}</p>
+    </div>
+  );
+}
+
+function StructureCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2.5">
+      <p className="mb-1 inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+        {icon}
+        {label}
+      </p>
+      <p className="font-mono text-[11px] leading-4 text-zinc-300">{value}</p>
     </div>
   );
 }

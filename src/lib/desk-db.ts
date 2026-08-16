@@ -6,12 +6,16 @@ import {
   isDeskChain,
   type DeskChain,
 } from "@/lib/alchemy-networks";
+import { validateWalletAddress } from "@/lib/wallet-address";
 
 export const CHAINS = DESK_CHAINS;
 export type { DeskChain };
 
 export const ALERT_TYPES = ["signal", "flow", "social", "score"] as const;
 export type DeskAlertType = (typeof ALERT_TYPES)[number];
+
+export const ALERT_SIDES = ["buy", "sell", "any"] as const;
+export type AlertSide = (typeof ALERT_SIDES)[number];
 
 export type WalletRow = {
   id: string;
@@ -36,12 +40,50 @@ export type AlertEventRow = {
   created_at: Date;
 };
 
+export type AlertRuleRow = {
+  id: string;
+  user_id: string;
+  wallet_id: string | null;
+  title: string;
+  side: string;
+  min_usd: number;
+  enabled: boolean;
+  created_at: Date;
+};
+
 function isChain(value: string): value is DeskChain {
   return isDeskChain(value);
 }
 
 function isAlertType(value: string): value is DeskAlertType {
   return (ALERT_TYPES as readonly string[]).includes(value);
+}
+
+function isAlertSide(value: string): value is AlertSide {
+  return (ALERT_SIDES as readonly string[]).includes(value);
+}
+
+let alertRulesReady = false;
+
+async function ensureAlertRulesTable() {
+  if (alertRulesReady) return;
+  await getPgPool().query(`
+    CREATE TABLE IF NOT EXISTS public.alert_rules (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      wallet_id text NULL,
+      title text NOT NULL,
+      side text NOT NULL DEFAULT 'any',
+      min_usd double precision NOT NULL DEFAULT 25000,
+      enabled boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await getPgPool().query(`
+    CREATE INDEX IF NOT EXISTS alert_rules_user_idx
+    ON public.alert_rules (user_id)
+  `);
+  alertRulesReady = true;
 }
 
 export function normalizeAddress(address: string) {
@@ -80,8 +122,9 @@ export async function createWallet(
   if (!isChain(chain)) {
     throw new Error("Invalid chain");
   }
-  if (address.length < 8 || address.length > 128) {
-    throw new Error("Invalid address length");
+  const addressError = validateWalletAddress(chain, address);
+  if (addressError) {
+    throw new Error(addressError);
   }
 
   const id = randomUUID();
@@ -139,7 +182,7 @@ export async function listAlertEvents(userId: string) {
 
 export async function createAlertEvent(
   userId: string,
-  input: { title: string; detail?: string; alertType: string },
+  input: { title: string; detail?: string; alertType: string; ruleId?: string | null },
 ) {
   const title = input.title.trim().slice(0, 160);
   const detail = (input.detail ?? "").trim().slice(0, 800);
@@ -150,10 +193,10 @@ export async function createAlertEvent(
 
   const id = randomUUID();
   const { rows } = await getPgPool().query<AlertEventRow>(
-    `INSERT INTO public.alert_events (id, user_id, title, detail, severity, alert_type, dismissed)
-     VALUES ($1, $2, $3, $4, 'info', $5, false)
+    `INSERT INTO public.alert_events (id, user_id, rule_id, title, detail, severity, alert_type, dismissed)
+     VALUES ($1, $2, $3, $4, $5, 'info', $6, false)
      RETURNING id, user_id, rule_id, title, detail, severity, alert_type, dismissed, created_at`,
-    [id, userId, title, detail, alertType],
+    [id, userId, input.ruleId ?? null, title, detail, alertType],
   );
   return rows[0];
 }
@@ -164,6 +207,66 @@ export async function dismissAlertEvent(userId: string, alertId: string) {
      SET dismissed = true
      WHERE id = $1 AND user_id = $2 AND dismissed = false`,
     [alertId, userId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function listAlertRules(userId: string) {
+  await ensureAlertRulesTable();
+  const { rows } = await getPgPool().query<AlertRuleRow>(
+    `SELECT id, user_id, wallet_id, title, side, min_usd, enabled, created_at
+     FROM public.alert_rules
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [userId],
+  );
+  return rows;
+}
+
+export async function createAlertRule(
+  userId: string,
+  input: {
+    title: string;
+    walletId?: string | null;
+    side?: string;
+    minUsd?: number;
+  },
+) {
+  await ensureAlertRulesTable();
+
+  const title = input.title.trim().slice(0, 120) || "Wallet size alert";
+  const side = (input.side || "any").trim().toLowerCase();
+  const minUsd = Number(input.minUsd ?? 25_000);
+  const walletId = input.walletId?.trim() || null;
+
+  if (!isAlertSide(side)) throw new Error("Invalid side (buy, sell, or any)");
+  if (!Number.isFinite(minUsd) || minUsd < 0) throw new Error("minUsd must be >= 0");
+  if (minUsd > 50_000_000) throw new Error("minUsd too large");
+
+  if (walletId) {
+    const wallet = await getWallet(userId, walletId);
+    if (!wallet) throw new Error("Wallet not found");
+  }
+
+  const existing = await listAlertRules(userId);
+  if (existing.length >= 20) throw new Error("Alert rule limit reached (20)");
+
+  const id = randomUUID();
+  const { rows } = await getPgPool().query<AlertRuleRow>(
+    `INSERT INTO public.alert_rules (id, user_id, wallet_id, title, side, min_usd, enabled)
+     VALUES ($1, $2, $3, $4, $5, $6, true)
+     RETURNING id, user_id, wallet_id, title, side, min_usd, enabled, created_at`,
+    [id, userId, walletId, title, side, minUsd],
+  );
+  return rows[0];
+}
+
+export async function deleteAlertRule(userId: string, ruleId: string) {
+  await ensureAlertRulesTable();
+  const { rowCount } = await getPgPool().query(
+    `DELETE FROM public.alert_rules WHERE id = $1 AND user_id = $2`,
+    [ruleId, userId],
   );
   return (rowCount ?? 0) > 0;
 }

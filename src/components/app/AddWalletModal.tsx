@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useDesk } from "@/lib/app-store";
-
-import { DESK_CHAINS } from "@/lib/alchemy-networks";
+import { DESK_CHAINS, type DeskChain } from "@/lib/alchemy-networks";
+import { addressPlaceholderFor, validateWalletAddress } from "@/lib/wallet-address";
 
 const chains = [...DESK_CHAINS];
 
@@ -17,6 +17,9 @@ export function AddWalletModal({
 }) {
   const { addWallet } = useDesk();
   const [error, setError] = useState<string | null>(null);
+  const [chain, setChain] = useState<DeskChain>("ETH");
+
+  const placeholder = useMemo(() => addressPlaceholderFor(chain), [chain]);
 
   if (!open) return null;
 
@@ -25,7 +28,8 @@ export function AddWalletModal({
       <div className="w-full max-w-md rounded-[22px] border border-white/10 bg-[#0c0c0e] p-5">
         <h2 className="font-sans text-xl font-semibold text-white">Add wallet</h2>
         <p className="mt-1 font-mono text-[12px] text-zinc-500">
-          ETH, Base, Arb, OP, Polygon, BNB, Avalanche, or Solana — live dossier + chart marks when Alchemy covers that network.
+          ETH, Base, Arb, OP, Polygon, BNB, Avalanche, or Solana — live dossier + chart marks when
+          Alchemy covers that network.
         </p>
 
         <form
@@ -35,17 +39,19 @@ export function AddWalletModal({
             const form = event.currentTarget;
             const label = (form.elements.namedItem("label") as HTMLInputElement).value.trim();
             const address = (form.elements.namedItem("address") as HTMLInputElement).value.trim();
-            const chain = (form.elements.namedItem("chain") as HTMLSelectElement).value;
+            const selected = (form.elements.namedItem("chain") as HTMLSelectElement)
+              .value as DeskChain;
 
-            if (address.length < 8) {
-              setError("Enter a wallet address.");
+            const formatError = validateWalletAddress(selected, address);
+            if (formatError) {
+              setError(formatError);
               return;
             }
 
             void (async () => {
               try {
                 setError(null);
-                await addWallet({ label, address, chain });
+                await addWallet({ label, address, chain: selected });
                 onClose();
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to add wallet");
@@ -61,21 +67,7 @@ export function AddWalletModal({
 
           <label className="block">
             <span className="font-mono text-[11px] text-zinc-400">Label</span>
-            <input
-              name="label"
-              placeholder="Wintermute desk"
-              className="auth-input mt-1.5"
-            />
-          </label>
-
-          <label className="block">
-            <span className="font-mono text-[11px] text-zinc-400">Address</span>
-            <input
-              name="address"
-              required
-              placeholder="0x…"
-              className="auth-input mt-1.5"
-            />
+            <input name="label" placeholder="Wintermute desk" className="auth-input mt-1.5" />
           </label>
 
           <label className="block">
@@ -83,14 +75,25 @@ export function AddWalletModal({
             <select
               name="chain"
               className="auth-input mt-1.5 appearance-none"
-              defaultValue="ETH"
+              value={chain}
+              onChange={(event) => setChain(event.target.value as DeskChain)}
             >
-              {chains.map((chain) => (
-                <option key={chain} value={chain} className="bg-[#0c0c0e]">
-                  {chain}
+              {chains.map((item) => (
+                <option key={item} value={item} className="bg-[#0c0c0e]">
+                  {item}
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block">
+            <span className="font-mono text-[11px] text-zinc-400">Address</span>
+            <input
+              name="address"
+              required
+              placeholder={placeholder}
+              className="auth-input mt-1.5"
+            />
           </label>
 
           <div className="flex gap-2 pt-2">

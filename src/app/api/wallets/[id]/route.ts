@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alchemyCoverageNote } from "@/lib/alchemy-networks";
 import { CURATED_SMART_MONEY } from "@/lib/curated-wallets";
 import { deleteWallet, getWallet } from "@/lib/desk-db";
 import { mockMoves, mockWallets } from "@/lib/mock/data";
@@ -7,9 +8,17 @@ import { requireSession } from "@/lib/session";
 import {
   buildDemoWalletDossier,
   buildLiveWalletDossier,
+  type WalletDossier,
 } from "@/lib/wallet-dossier";
 
 type Params = { params: Promise<{ id: string }> };
+
+function withCoverageNote(dossier: WalletDossier, chain: string): WalletDossier {
+  if (dossier.live) return dossier;
+  const coverage = alchemyCoverageNote(chain);
+  if (!coverage.message) return dossier;
+  return { ...dossier, note: coverage.message };
+}
 
 export async function GET(_request: Request, { params }: Params) {
   const session = await requireSession();
@@ -35,15 +44,19 @@ export async function GET(_request: Request, { params }: Params) {
       address: owned.address,
       chain: owned.chain,
     });
-    if (live) return NextResponse.json({ dossier: live });
+    if (live) return NextResponse.json({ dossier: live, coverage: alchemyCoverageNote(owned.chain) });
     return NextResponse.json({
-      dossier: buildDemoWalletDossier({
-        id: owned.id,
-        label: owned.label,
-        address: owned.address,
-        chain: owned.chain,
-        moves: mockMoves,
-      }),
+      dossier: withCoverageNote(
+        buildDemoWalletDossier({
+          id: owned.id,
+          label: owned.label,
+          address: owned.address,
+          chain: owned.chain,
+          moves: mockMoves,
+        }),
+        owned.chain,
+      ),
+      coverage: alchemyCoverageNote(owned.chain),
     });
   }
 
@@ -55,15 +68,21 @@ export async function GET(_request: Request, { params }: Params) {
       address: curated.address,
       chain: curated.chain,
     });
-    if (live) return NextResponse.json({ dossier: live });
+    if (live) {
+      return NextResponse.json({ dossier: live, coverage: alchemyCoverageNote(curated.chain) });
+    }
     return NextResponse.json({
-      dossier: buildDemoWalletDossier({
-        id: curated.id,
-        label: curated.label,
-        address: curated.address,
-        chain: curated.chain,
-        moves: mockMoves,
-      }),
+      dossier: withCoverageNote(
+        buildDemoWalletDossier({
+          id: curated.id,
+          label: curated.label,
+          address: curated.address,
+          chain: curated.chain,
+          moves: mockMoves,
+        }),
+        curated.chain,
+      ),
+      coverage: alchemyCoverageNote(curated.chain),
     });
   }
 
@@ -87,17 +106,23 @@ export async function GET(_request: Request, { params }: Params) {
         address,
         chain,
       });
-      if (live) return NextResponse.json({ dossier: live });
+      if (live) {
+        return NextResponse.json({ dossier: live, coverage: alchemyCoverageNote(chain) });
+      }
     }
 
     return NextResponse.json({
-      dossier: buildDemoWalletDossier({
-        id: mock.id,
-        label: mock.label,
-        address,
+      dossier: withCoverageNote(
+        buildDemoWalletDossier({
+          id: mock.id,
+          label: mock.label,
+          address,
+          chain,
+          moves: mockMoves,
+        }),
         chain,
-        moves: mockMoves,
-      }),
+      ),
+      coverage: alchemyCoverageNote(chain),
     });
   }
 

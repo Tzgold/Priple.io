@@ -19,6 +19,11 @@ export type CoinAnalysis = {
     liquidityLabel: string;
     depthLabel: string | null;
   };
+  structure: {
+    liquidityNote: string;
+    volumeNote: string;
+    holderNote: string;
+  };
   risk: {
     level: "low" | "medium" | "high" | "unknown";
     notes: string[];
@@ -33,6 +38,7 @@ export type CoinAnalysis = {
   holders: {
     countLabel: string;
     top10Label: string;
+    next20Label: string;
   };
   whyHere: string | null;
   sources: string[];
@@ -65,22 +71,84 @@ function buildRisk(desk: TokenDesk) {
     notes.push("Freeze authority may still be active.");
     score += 2;
   }
-  if (desk.liquidityUsd != null && desk.liquidityUsd < 25_000) {
+  if (desk.liquidityUsd != null && desk.liquidityUsd < 10_000) {
+    notes.push("Very thin liquidity (<$10k) — exits can fail.");
+    score += 3;
+  } else if (desk.liquidityUsd != null && desk.liquidityUsd < 25_000) {
     notes.push("Thin liquidity — exits can slip hard.");
     score += 2;
+  } else if (desk.liquidityUsd != null && desk.liquidityUsd < 100_000) {
+    notes.push("Moderate liquidity — size carefully.");
+    score += 1;
   }
-  if (desk.info?.holders.top10Pct != null && desk.info.holders.top10Pct > 40) {
+  if (
+    desk.volume24hUsd != null &&
+    desk.liquidityUsd != null &&
+    desk.liquidityUsd > 0 &&
+    desk.volume24hUsd / desk.liquidityUsd > 8
+  ) {
+    notes.push("24h volume is very high vs liquidity — possible wash or thin book churn.");
+    score += 1;
+  }
+  if (desk.info?.holders.top10Pct != null && desk.info.holders.top10Pct > 55) {
+    notes.push(`Extreme concentration: top 10 hold ~${desk.info.holders.top10Pct.toFixed(0)}%.`);
+    score += 2;
+  } else if (desk.info?.holders.top10Pct != null && desk.info.holders.top10Pct > 40) {
     notes.push(`Top 10 holders control ~${desk.info.holders.top10Pct.toFixed(0)}%.`);
+    score += 1;
+  }
+  if (sec?.developerHoldingPct != null && sec.developerHoldingPct > 10) {
+    notes.push(`Developer holding ~${sec.developerHoldingPct.toFixed(1)}%.`);
     score += 1;
   }
   if (sec?.gtScore != null) {
     notes.push(`GeckoTerminal score ${sec.gtScore.toFixed(0)}/100.`);
     if (sec.gtScore < 40) score += 2;
+    else if (sec.gtScore < 60) score += 1;
+  }
+  if (sec?.verified === false) {
+    notes.push("Token not marked verified in available feeds.");
+    score += 1;
   }
   if (notes.length === 0) notes.push("No hard security red flags in available feeds.");
 
-  const level = score >= 4 ? "high" : score >= 2 ? "medium" : score === 0 ? "low" : "medium";
+  const level = score >= 5 ? "high" : score >= 2 ? "medium" : score === 0 ? "low" : "medium";
   return { level: level as "low" | "medium" | "high" | "unknown", notes };
+}
+
+function buildStructure(desk: TokenDesk, mcapValue: number | null) {
+  const liq = desk.liquidityUsd;
+  const vol = desk.volume24hUsd;
+  const top10 = desk.info?.holders.top10Pct;
+
+  const liquidityNote =
+    liq == null
+      ? "Liquidity not reported for this pool."
+      : liq < 25_000
+        ? `Liquidity ${money(liq)} — thin book; expect slippage.`
+        : liq < 250_000
+          ? `Liquidity ${money(liq)} — usable for small size.`
+          : `Liquidity ${money(liq)} — deeper book on this pool.`;
+
+  const volumeNote =
+    vol == null
+      ? "24h volume not reported."
+      : liq != null && liq > 0
+        ? `24h volume ${money(vol)} (${(vol / liq).toFixed(1)}× liquidity).`
+        : `24h volume ${money(vol)}.`;
+
+  const holderNote =
+    top10 == null
+      ? "Holder concentration not available."
+      : top10 > 40
+        ? `Top 10 control ${top10.toFixed(1)}% — concentration risk.`
+        : `Top 10 control ${top10.toFixed(1)}% — healthier distribution than most memes.`;
+
+  if (mcapValue != null && liq != null && mcapValue > 0) {
+    // depth already covered in market.depthLabel; keep notes focused
+  }
+
+  return { liquidityNote, volumeNote, holderNote };
 }
 
 /** Grounded research brief from live desk sources (no LLM required). */
@@ -112,9 +180,14 @@ export async function buildCoinAnalysis(input: {
         liquidityLabel: "—",
         depthLabel: null,
       },
+      structure: {
+        liquidityNote: "CEX majors — liquidity is venue-dependent, not a single DEX pool.",
+        volumeNote: "Use TradingView volume for structure.",
+        holderNote: "On-chain holder concentration is less relevant for CEX majors.",
+      },
       risk: { level: "unknown", notes: ["CEX majors — risk is market/volatility, not honeypot style."] },
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
-      holders: { countLabel: "—", top10Label: "—" },
+      holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
       sources: ["CoinGecko", "TradingView"],
       generatedAt: new Date().toISOString(),
@@ -188,6 +261,7 @@ export async function buildCoinAnalysis(input: {
 
   const change = merged.priceChange24h;
   const risk = buildRisk(merged);
+  const structure = buildStructure(merged, mcap.value);
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
       ? `${((merged.liquidityUsd / mcap.value) * 100).toFixed(1)}% liq / mcap`
@@ -203,11 +277,9 @@ export async function buildCoinAnalysis(input: {
         : `Down ${Math.abs(change).toFixed(1)}% over 24h on available pool data.`,
     );
   }
-  if (merged.volume24hUsd != null && merged.liquidityUsd != null) {
-    summary.push(
-      `24h volume ${money(merged.volume24hUsd)} against ${money(merged.liquidityUsd)} liquidity.`,
-    );
-  }
+  summary.push(structure.liquidityNote);
+  summary.push(structure.volumeNote);
+  summary.push(structure.holderNote);
   if (mcap.value != null) {
     summary.push(`${mcap.label} prints around ${money(mcap.value)}.`);
   }
@@ -215,9 +287,6 @@ export async function buildCoinAnalysis(input: {
     summary.push("Public social / web links are available — check them before sizing any idea.");
   } else {
     summary.push("Little verified social presence in feeds — treat narrative claims carefully.");
-  }
-  if (summary.length < 2) {
-    summary.push("Research surface is live; keep confirming pool, liquidity, and holder risk yourself.");
   }
 
   const headline =
@@ -231,7 +300,7 @@ export async function buildCoinAnalysis(input: {
     network: merged.network,
     address: merged.address,
     headline,
-    summary: summary.slice(0, 5),
+    summary: summary.slice(0, 6),
     market: {
       priceLabel: money(merged.priceUsd),
       mcapLabel: money(mcap.value),
@@ -242,9 +311,10 @@ export async function buildCoinAnalysis(input: {
       liquidityLabel: money(merged.liquidityUsd),
       depthLabel: depth,
     },
+    structure,
     risk,
     social: {
-      websites: info?.socials.websites ?? [],
+      websites: (info?.socials.websites ?? []).filter((url) => /^https?:\/\//i.test(url)),
       twitter: info?.socials.twitter ?? null,
       telegram: info?.socials.telegram ?? null,
       discord: info?.socials.discord ?? null,
@@ -255,6 +325,8 @@ export async function buildCoinAnalysis(input: {
         info?.holders.count != null ? info.holders.count.toLocaleString("en-US") : "—",
       top10Label:
         info?.holders.top10Pct != null ? `${info.holders.top10Pct.toFixed(1)}%` : "—",
+      next20Label:
+        info?.holders.next20Pct != null ? `${info.holders.next20Pct.toFixed(1)}%` : "—",
     },
     whyHere: input.whyHere ?? null,
     sources,
