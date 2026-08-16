@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 const globalForDb = globalThis as unknown as {
   priplePgPool?: Pool;
@@ -8,6 +8,23 @@ function isProduction() {
   return process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 }
 
+/** SSL for managed Postgres. Default verifies certs; opt out only if needed. */
+function sslConfig(connectionString: string): PoolConfig["ssl"] {
+  const urlNeedsSsl =
+    connectionString.includes("supabase") ||
+    connectionString.includes("sslmode=require") ||
+    isProduction();
+
+  if (!urlNeedsSsl) return undefined;
+
+  // Escape hatch for broken intermediary certs — prefer fixing CA over using this.
+  if (process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "false") {
+    return { rejectUnauthorized: false };
+  }
+
+  return { rejectUnauthorized: true };
+}
+
 export function getPgPool(): Pool {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -15,11 +32,9 @@ export function getPgPool(): Pool {
   }
 
   if (!globalForDb.priplePgPool) {
-    const isSupabase = url.includes("supabase");
     globalForDb.priplePgPool = new Pool({
       connectionString: url,
-      // Supabase pooler uses certs that Node may not trust in all environments.
-      ssl: isSupabase || isProduction() ? { rejectUnauthorized: false } : undefined,
+      ssl: sslConfig(url),
       max: isProduction() ? 5 : 10,
       idleTimeoutMillis: 20_000,
       connectionTimeoutMillis: 10_000,
