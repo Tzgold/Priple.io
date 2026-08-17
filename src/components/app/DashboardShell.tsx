@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { Bell, LogOut } from "lucide-react";
 import { CommandSearch } from "@/components/app/CommandSearch";
 import { CopyButton } from "@/components/app/CopyButton";
@@ -96,7 +97,9 @@ export function DashboardShell({
       <WalletModalProvider>
         <div className="min-h-screen bg-black text-white">
           <div className="mx-auto flex min-h-screen max-w-[1500px] flex-col gap-4 p-3 sm:p-4 lg:flex-row lg:p-5">
-            <WatchlistPanel workspace={user.email} />
+            <Suspense fallback={<aside className="hidden lg:block lg:w-[340px] xl:w-[360px]" />}>
+              <WatchlistPanel workspace={user.email} />
+            </Suspense>
             <section className="flex min-w-0 flex-1 flex-col rounded-[22px] border border-white/[0.08] bg-[#0c0c0e] p-4 sm:p-5">
               <DashboardTopBar user={user} />
               <div className="min-h-0 flex-1">{children}</div>
