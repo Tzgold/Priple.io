@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/app/DashboardShell";
 import { CoinAnalysisPanel } from "@/components/app/CoinAnalysisPanel";
+import { FlowsPanel } from "@/components/app/FlowsPanel";
 import { PairSearchBox, type PairHit } from "@/components/app/PairSearchBox";
 import { ScreenerRails, type RailCoin } from "@/components/app/ScreenerRails";
 import { TokenDeskView } from "@/components/app/TokenDeskView";
@@ -85,6 +86,11 @@ function ScreenerBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const boardById = useMemo(
+    () => new Map(board.map((row) => [row.id, row])),
+    [board],
+  );
+
   const walletBuyRails: RailCoin[] = useMemo(() => {
     const seen = new Set<string>();
     const rows: RailCoin[] = [];
@@ -103,6 +109,7 @@ function ScreenerBoard() {
         name: item.asset,
         imageUrl: null,
         meta: `${item.walletLabel} · ${item.usd} · ${item.time}`,
+        score: boardById.get(id)?.score ?? null,
         whyHere: `Tracked wallet “${item.walletLabel}” bought ${item.amount} ${item.asset} (${item.usd}) — ${item.date} ${item.time}.`,
         walletAddress: item.walletAddress || null,
         walletLabel: item.walletLabel,
@@ -110,7 +117,7 @@ function ScreenerBoard() {
       if (rows.length >= 16) break;
     }
     return rows;
-  }, [pulseBuys]);
+  }, [pulseBuys, boardById]);
 
   const watchlistRails: RailCoin[] = useMemo(
     () =>
@@ -139,13 +146,41 @@ function ScreenerBoard() {
           name: row.name,
           imageUrl: row.imageUrl,
           change24h: row.change24h,
+          score: row.score ?? null,
           meta: row.kind === "major" ? "Major" : row.poolName || "Trending",
         })),
     [board],
   );
 
+  const activeCoin = useMemo(() => {
+    if (!network || !address) return null;
+    const id = `${network}:${address.toLowerCase()}`;
+    return (
+      board.find((row) => row.id === id) ||
+      walletBuyRails.find((row) => row.id === id) ||
+      watchlistRails.find((row) => row.id === id) ||
+      trendingRails.find((row) => row.id === id) ||
+      null
+    );
+  }, [network, address, board, walletBuyRails, watchlistRails, trendingRails]);
+
   const activeId =
     network && address ? `${network}:${address.toLowerCase()}` : null;
+
+  const walletBuyCount = useMemo(() => {
+    if (!activeId) return 0;
+    const seen = new Set<string>();
+    for (const item of pulseBuys) {
+      const route = resolvePulseBuy(item);
+      const id = route
+        ? `${route.network}:${route.address.toLowerCase()}`
+        : null;
+      if (id === activeId || (!id && activeCoin && item.asset.toUpperCase() === activeCoin.symbol.toUpperCase())) {
+        seen.add(item.walletAddress || item.walletLabel);
+      }
+    }
+    return seen.size;
+  }, [pulseBuys, activeId, activeCoin]);
 
   const whyHere =
     whyParam ||
@@ -175,7 +210,7 @@ function ScreenerBoard() {
     <div className="space-y-5">
       <PageHeader
         title="Screener"
-        description="Open a coin → desk + research brief lead. Rails below: wallet buys, your watchlist, trending."
+        description="Open a coin → desk + Opportunity Score lead. Rails: wallet buys, watchlist, trending (sorted by score)."
       />
 
       <PairSearchBox onSelect={openPair} />
@@ -194,7 +229,22 @@ function ScreenerBoard() {
             trackSide={trackSide}
             trackWhy={whyParam}
           />
-          <CoinAnalysisPanel network={network} address={address} whyHere={whyHere} />
+          <CoinAnalysisPanel
+            network={network}
+            address={address}
+            whyHere={whyHere}
+            trackedWalletBuys={walletBuyCount}
+          />
+          <FlowsPanel
+            compact
+            title="Flows on this coin"
+            description="Tracked wallets that bought the same asset — leader, followers, and cross-chain overlap."
+            filter={{
+              symbol: activeCoin?.symbol ?? undefined,
+              network,
+              address,
+            }}
+          />
         </div>
       ) : (
         <p className="rounded-[20px] border border-white/[0.08] bg-black/30 px-4 py-10 text-center font-mono text-[12px] text-zinc-600">

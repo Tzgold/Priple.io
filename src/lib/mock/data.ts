@@ -275,4 +275,16 @@ export const mockMoves = [
     status: "Watching" as const,
     type: "buy" as const,
   },
+  {
+    id: "m6",
+    wallet: "Smart Money α",
+    action: "Bought",
+    amount: "$310k",
+    asset: "LINK",
+    usd: "$310,400",
+    time: "15:06",
+    date: "Today",
+    status: "Confirmed" as const,
+    type: "buy" as const,
+  },
 ];

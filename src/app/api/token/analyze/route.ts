@@ -18,13 +18,23 @@ export async function GET(request: Request) {
   const network = url.searchParams.get("network");
   const address = url.searchParams.get("address");
   const whyHere = url.searchParams.get("why") || null;
+  const walletBuysRaw = url.searchParams.get("walletBuys");
+  const trackedWalletBuys = walletBuysRaw ? Number(walletBuysRaw) : undefined;
 
   if (!network || !address) {
     return NextResponse.json({ error: "network and address are required" }, { status: 400 });
   }
 
   try {
-    const analysis = await buildCoinAnalysis({ network, address, whyHere });
+    const analysis = await buildCoinAnalysis({
+      network,
+      address,
+      whyHere,
+      trackedWalletBuys:
+        trackedWalletBuys != null && Number.isFinite(trackedWalletBuys)
+          ? Math.max(0, Math.floor(trackedWalletBuys))
+          : undefined,
+    });
     if (!analysis) {
       return NextResponse.json({ error: "Could not build analysis" }, { status: 404 });
     }

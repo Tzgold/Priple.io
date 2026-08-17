@@ -15,6 +15,7 @@ import {
   Layers,
 } from "lucide-react";
 import { TokenMark } from "@/components/app/TokenMark";
+import { FlowsPanel } from "@/components/app/FlowsPanel";
 import { Button } from "@/components/ui/Button";
 import { useAddWallet } from "@/components/app/WalletModalProvider";
 import { cn } from "@/lib/cn";
@@ -217,6 +218,11 @@ export function OverviewBoard() {
           ))
         )}
       </section>
+
+      <FlowsPanel
+        title="When wallets move together"
+        description="Overlap clusters from your pulse — who entered first, who followed, and whether the pattern spans chains."
+      />
 
       <section className="rounded-[20px] border border-white/[0.08] bg-black/30 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
