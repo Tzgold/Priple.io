@@ -1,4 +1,5 @@
 import { mockTokens } from "@/lib/mock/data";
+import { legacyMajorScore } from "@/lib/opportunity-score";
 
 export type ScreenerToken = {
   id: string;
@@ -67,19 +68,13 @@ function formatVolume(value: number | null) {
   return `$${value.toFixed(0)}`;
 }
 
-/** Lightweight Opportunity Score until we wire multi-factor research. */
+/** @deprecated Use scoreFromMarketSnapshot / computeOpportunityScore. */
 export function opportunityScore(input: {
   change24h: number | null;
   volume: number | null;
   marketCap: number | null;
 }) {
-  const change = input.change24h ?? 0;
-  const volume = Math.max(input.volume ?? 0, 1);
-  const mcap = Math.max(input.marketCap ?? 0, 1);
-  const momentum = Math.max(-20, Math.min(25, change * 1.4));
-  const liquidity = Math.min(20, Math.log10(volume) * 2.2);
-  const size = Math.min(15, Math.log10(mcap) * 1.4);
-  return Math.round(Math.max(5, Math.min(98, 42 + momentum + liquidity + size)));
+  return legacyMajorScore(input);
 }
 
 function mapMarket(coin: CoinGeckoMarket): ScreenerToken {

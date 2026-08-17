@@ -15,6 +15,8 @@ export type BoardToken = {
   fdvUsd: number | null;
   kind: "major" | "trending" | "new";
   poolName: string | null;
+  /** Multi-factor Opportunity Score (0–100). */
+  score?: number | null;
 };
 
 export const MAJOR_TOKEN_ROUTES: Record<
