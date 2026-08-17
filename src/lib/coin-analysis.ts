@@ -1,6 +1,7 @@
 import { estimateMarketCap } from "@/lib/candle-math";
 import { fetchDexScreenerEnrichment } from "@/lib/dexscreener";
 import { fetchTokenDesk, type TokenDesk } from "@/lib/geckoterminal";
+import { computeOpportunityScore, type OpportunityResult } from "@/lib/opportunity-score";
 import { fetchOnchainTokenInfo } from "@/lib/token-info";
 
 export type CoinAnalysis = {
@@ -41,6 +42,7 @@ export type CoinAnalysis = {
     next20Label: string;
   };
   whyHere: string | null;
+  opportunity: OpportunityResult | null;
   sources: string[];
   generatedAt: string;
 };
@@ -156,6 +158,7 @@ export async function buildCoinAnalysis(input: {
   network: string;
   address: string;
   whyHere?: string | null;
+  trackedWalletBuys?: number;
 }): Promise<CoinAnalysis | null> {
   const sources: string[] = [];
   let desk: TokenDesk | null = null;
@@ -189,6 +192,13 @@ export async function buildCoinAnalysis(input: {
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
       holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
+      opportunity: computeOpportunityScore({
+        change24h: null,
+        riskLevel: "unknown",
+        hasSocials: false,
+        hasWhyHere: Boolean(input.whyHere),
+        trackedWalletBuys: input.whyHere ? 1 : 0,
+      }),
       sources: ["CoinGecko", "TradingView"],
       generatedAt: new Date().toISOString(),
     };
@@ -294,6 +304,25 @@ export async function buildCoinAnalysis(input: {
       ? `${merged.symbol}: on your radar because a tracked wallet moved it`
       : `${merged.symbol}: live desk brief from market + on-chain feeds`;
 
+  const hasSocials = Boolean(
+    info?.socials.twitter ||
+      info?.socials.telegram ||
+      (info?.socials.websites?.length ?? 0) > 0,
+  );
+
+  const opportunity = computeOpportunityScore({
+    change24h: change,
+    volume24hUsd: merged.volume24hUsd,
+    liquidityUsd: merged.liquidityUsd,
+    marketCapUsd: mcap.value,
+    riskLevel: risk.level,
+    gtScore: merged.info?.security?.gtScore ?? null,
+    hasSocials,
+    holderTop10Pct: merged.info?.holders.top10Pct ?? null,
+    hasWhyHere: Boolean(input.whyHere),
+    trackedWalletBuys: input.trackedWalletBuys ?? (input.whyHere ? 1 : 0),
+  });
+
   return {
     symbol: merged.symbol,
     name: merged.name,
@@ -329,6 +358,7 @@ export async function buildCoinAnalysis(input: {
         info?.holders.next20Pct != null ? `${info.holders.next20Pct.toFixed(1)}%` : "—",
     },
     whyHere: input.whyHere ?? null,
+    opportunity,
     sources,
     generatedAt: new Date().toISOString(),
   };

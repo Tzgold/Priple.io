@@ -1,6 +1,7 @@
 "use client";
 
 import { TokenMark } from "@/components/app/TokenMark";
+import { OpportunityScoreBadge } from "@/components/app/OpportunityScoreCard";
 import { cn } from "@/lib/cn";
 
 export type RailCoin = {
@@ -12,6 +13,7 @@ export type RailCoin = {
   imageUrl: string | null;
   meta?: string | null;
   change24h?: number | null;
+  score?: number | null;
   whyHere?: string | null;
   walletAddress?: string | null;
   walletLabel?: string | null;
@@ -138,6 +140,7 @@ function RailColumn({
                       {coin.meta || coin.name}
                     </span>
                   </span>
+                  {coin.score != null ? <OpportunityScoreBadge total={coin.score} /> : null}
                   {ch ? (
                     <span
                       className={cn(

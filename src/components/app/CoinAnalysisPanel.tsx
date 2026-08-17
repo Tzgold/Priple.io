@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, Droplets, Globe, Radio, Shield, Users } from "lucide-react";
+import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
 import { cn } from "@/lib/cn";
 import type { CoinAnalysis } from "@/lib/coin-analysis";
 
@@ -20,10 +21,12 @@ export function CoinAnalysisPanel({
   network,
   address,
   whyHere,
+  trackedWalletBuys,
 }: {
   network: string;
   address: string;
   whyHere?: string | null;
+  trackedWalletBuys?: number;
 }) {
   const [analysis, setAnalysis] = useState<CoinAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,9 @@ export function CoinAnalysisPanel({
 
     const qs = new URLSearchParams({ network, address });
     if (whyHere) qs.set("why", whyHere);
+    if (trackedWalletBuys != null && trackedWalletBuys > 0) {
+      qs.set("walletBuys", String(trackedWalletBuys));
+    }
 
     void (async () => {
       try {
@@ -60,7 +66,7 @@ export function CoinAnalysisPanel({
     return () => {
       cancelled = true;
     };
-  }, [network, address, whyHere]);
+  }, [network, address, whyHere, trackedWalletBuys]);
 
   const website = safeHttpUrl(analysis?.social.websites[0]);
 
@@ -98,7 +104,11 @@ export function CoinAnalysisPanel({
       ) : null}
 
       {analysis ? (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+        <div className="mt-4 space-y-4">
+          {analysis.opportunity ? (
+            <OpportunityScoreCard score={analysis.opportunity} compact />
+          ) : null}
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
           <div className="space-y-3">
             {analysis.whyHere ? (
               <p className="rounded-2xl border border-teal-500/20 bg-teal-500/10 px-3 py-2.5 font-mono text-[12px] text-teal-100">
@@ -200,6 +210,7 @@ export function CoinAnalysisPanel({
             <p className="font-mono text-[10px] text-zinc-600">
               Sources: {analysis.sources.join(" · ")} · research only, not advice
             </p>
+          </div>
           </div>
         </div>
       ) : loading ? (
