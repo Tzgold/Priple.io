@@ -100,8 +100,21 @@ async function notifyAlertEmail(userId: string, title: string, detail: string) {
   }
 }
 
+function createMailBudget(max: number) {
+  let sent = 0;
+  return async (userId: string, title: string, detail: string) => {
+    if (sent >= max) return;
+    sent += 1;
+    await notifyAlertEmail(userId, title, detail);
+  };
+}
+
 /** Evaluate user rules against pulse items (wallet + side + min USD). */
-export async function evaluateAlertRulesFromPulse(userId: string, items: PulseItem[]) {
+export async function evaluateAlertRulesFromPulse(
+  userId: string,
+  items: PulseItem[],
+  mail?: (userId: string, title: string, detail: string) => Promise<void>,
+) {
   const [rules, wallets] = await Promise.all([listAlertRules(userId), listWallets(userId)]);
   if (rules.length === 0) return 0;
 
@@ -111,7 +124,7 @@ export async function evaluateAlertRulesFromPulse(userId: string, items: PulseIt
 
   let created = 0;
   for (const item of items) {
-    if (item.source === "demo") continue;
+    if (item.source !== "personal") continue;
     if (!item.hash && !item.id) continue;
 
     for (const rule of rules) {
@@ -138,7 +151,11 @@ export async function evaluateAlertRulesFromPulse(userId: string, items: PulseIt
         });
         if (ok) {
           created += 1;
-          void notifyAlertEmail(userId, rule.title || `${item.walletLabel} ${item.action} ${item.asset}`, `${item.walletLabel} · ${item.amount} ${item.asset} (${item.usd})`);
+          void (mail ?? notifyAlertEmail)(
+            userId,
+            rule.title || `${item.walletLabel} ${item.action} ${item.asset}`,
+            `${item.walletLabel} · ${item.amount} ${item.asset} (${item.usd})`,
+          );
         }
       } catch {
         // Skip transient write issues.
@@ -152,9 +169,10 @@ export async function evaluateAlertRulesFromPulse(userId: string, items: PulseIt
 /** Persist notable pulse transfers as inbox alerts (idempotent via fingerprint). */
 export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
   let created = 0;
+  const mail = createMailBudget(3);
 
   for (const item of items) {
-    if (item.source === "demo") continue;
+    if (item.source !== "personal") continue;
     if (!item.hash && !item.id) continue;
 
     const usd = parseUsd(item.usd);
@@ -187,7 +205,7 @@ export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
       });
       if (ok) {
         created += 1;
-        void notifyAlertEmail(userId, title, detail);
+        void mail(userId, title, detail);
       }
     } catch {
       // Skip transient write issues; pulse still returns.
@@ -195,7 +213,7 @@ export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
   }
 
   try {
-    created += await evaluateAlertRulesFromPulse(userId, items);
+    created += await evaluateAlertRulesFromPulse(userId, items, mail);
   } catch {
     // Rules are best-effort on top of default pulse sync.
   }

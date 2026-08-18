@@ -44,12 +44,14 @@ function topAssets(dossier: WalletDossier, limit = 3) {
 
 function clustersForWallet(clusters: FlowCluster[], address: string, label: string) {
   const addr = address.toLowerCase();
+  const usableAddress = addr.length >= 8 && !addr.includes("…");
   return clusters.filter((cluster) =>
-    cluster.moves.some(
-      (move) =>
-        (move.walletAddress && move.walletAddress.toLowerCase() === addr) ||
-        move.walletLabel === label,
-    ),
+    cluster.moves.some((move) => {
+      if (usableAddress && move.walletAddress) {
+        return move.walletAddress.toLowerCase() === addr;
+      }
+      return !usableAddress && move.walletLabel === label;
+    }),
   );
 }
 
@@ -70,14 +72,19 @@ export function buildWalletNarrative(
   const tops = topAssets(dossier);
   const bias = biasLabel(dossier.buysCount, dossier.sellsCount);
   const related = clustersForWallet(clusters, dossier.address, dossier.label);
-  const sources = [dossier.live ? "Alchemy transfers" : "Demo pulse", "Holdings snapshot"];
+  const sources = [
+    dossier.live ? "Alchemy transfers" : "Demo pulse",
+    ...(dossier.holdings.length > 0 ? ["Holdings snapshot"] : []),
+  ];
   if (related.length > 0) sources.push("Wallet overlap (Flows)");
 
   const paragraphs: string[] = [];
 
   if (dossier.activity.length === 0) {
     paragraphs.push(
-      `${dossier.label} has no recent transfers in this window. Holdings shown: ${dossier.holdings.length}.`,
+      dossier.holdings.length > 0
+        ? `${dossier.label} has no recent transfers in this window. Holdings shown: ${dossier.holdings.length}.`
+        : `${dossier.label} has no recent transfers in this window.`,
     );
   } else {
     paragraphs.push(
@@ -163,11 +170,13 @@ export function dossierFromPulse(
 ): WalletDossier | null {
   if (!wallet.label && !wallet.address) return null;
   const addr = (wallet.address || "").toLowerCase();
-  const rows = items.filter(
-    (item) =>
-      (addr && item.walletAddress && item.walletAddress.toLowerCase() === addr) ||
-      item.walletLabel === wallet.label,
-  );
+  const usableAddress = addr.length >= 8 && !addr.includes("…");
+  const rows = items.filter((item) => {
+    if (usableAddress) {
+      return Boolean(item.walletAddress) && item.walletAddress.toLowerCase() === addr;
+    }
+    return item.walletLabel === wallet.label;
+  });
 
   const activity = rows.map((item) => ({
     id: item.id,

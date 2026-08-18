@@ -355,8 +355,9 @@ export async function upsertUserSettings(
   const telegramHandle =
     input.telegramHandle === undefined ? current.telegram_handle : input.telegramHandle;
   const defaultChart = input.defaultChart ?? current.default_chart;
-  const handle =
-    typeof telegramHandle === "string" ? telegramHandle.replace(/^@/, "").trim().slice(0, 64) || null : null;
+  const rawHandle =
+    typeof telegramHandle === "string" ? telegramHandle.replace(/^@/, "").trim().slice(0, 32) : null;
+  const handle = rawHandle && /^[A-Za-z0-9_]{3,32}$/.test(rawHandle) ? rawHandle : null;
 
   const { rows } = await getPgPool().query<UserSettingsRow>(
     `INSERT INTO public.user_settings (user_id, email_alerts, telegram_handle, default_chart, updated_at)

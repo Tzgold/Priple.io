@@ -3,6 +3,13 @@ import { fetchCoinIntel } from "@/lib/coin-intel";
 import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 
+function clip(value: string | null, max: number) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, max);
+}
+
 export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
@@ -15,10 +22,10 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const network = url.searchParams.get("network") || undefined;
-  const address = url.searchParams.get("address") || undefined;
-  const symbol = url.searchParams.get("symbol") || undefined;
-  const coingeckoId = url.searchParams.get("cg") || undefined;
+  const network = clip(url.searchParams.get("network"), 32);
+  const address = clip(url.searchParams.get("address"), 64);
+  const symbol = clip(url.searchParams.get("symbol"), 24);
+  const coingeckoId = clip(url.searchParams.get("cg"), 80);
   const hasSocialLinks = url.searchParams.get("social") === "1";
 
   if (!network && !address && !symbol && !coingeckoId) {
@@ -34,8 +41,7 @@ export async function GET(request: Request) {
       hasSocialLinks,
     });
     return NextResponse.json({ intel });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Intel failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch {
+    return NextResponse.json({ error: "Could not load social/news feeds" }, { status: 502 });
   }
 }

@@ -15,8 +15,8 @@ export type IntelSocial = {
   redditPosts48h: number | null;
   telegramUsers: number | null;
   sentimentUpPct: number | null;
-  heat: number;
-  heatLabel: "quiet" | "warming" | "hot";
+  heat: number | null;
+  heatLabel: "unknown" | "quiet" | "warming" | "hot";
 };
 
 export type CoinIntel = {
@@ -63,6 +63,7 @@ function safeHttpsUrl(value: string | null | undefined) {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
     return url.toString();
   } catch {
     return null;
@@ -107,6 +108,7 @@ async function fetchCgCommunity(id: string): Promise<CgCommunity | null> {
     const response = await fetch(url, {
       headers: cgHeaders(),
       next: { revalidate: 120 },
+      signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return null;
     const coin = (await response.json()) as {
@@ -160,6 +162,7 @@ async function fetchHeadlines(ticker: string): Promise<{ items: IntelHeadline[];
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
       next: { revalidate: 180 },
+      signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return { items: [], sourceOk: false };
     const json = (await response.json()) as { Data?: CryptoCompareNewsItem[] };
@@ -209,6 +212,26 @@ function heatFromSocial(input: {
   sentimentUpPct: number | null;
   headlineCount: number;
 }): IntelSocial {
+  const hasSignal =
+    (input.twitterFollowers != null && input.twitterFollowers > 0) ||
+    (input.redditSubscribers != null && input.redditSubscribers > 0) ||
+    (input.redditPosts48h != null && input.redditPosts48h > 0) ||
+    (input.telegramUsers != null && input.telegramUsers > 0) ||
+    input.sentimentUpPct != null ||
+    input.headlineCount > 0;
+
+  if (!hasSignal) {
+    return {
+      twitterFollowers: input.twitterFollowers,
+      redditSubscribers: input.redditSubscribers,
+      redditPosts48h: input.redditPosts48h,
+      telegramUsers: input.telegramUsers,
+      sentimentUpPct: input.sentimentUpPct,
+      heat: null,
+      heatLabel: "unknown",
+    };
+  }
+
   let heat = 18;
   if (input.twitterFollowers && input.twitterFollowers > 0) {
     heat += Math.min(24, Math.log10(input.twitterFollowers) * 7);
@@ -268,7 +291,7 @@ function buildPulse(input: {
     lines.push("No verified social crowd stats in CoinGecko for this ticker.");
   }
 
-  if (social.sentimentUpPct != null) {
+  if (social.sentimentUpPct != null && social.heatLabel !== "unknown") {
     lines.push(
       `CoinGecko sentiment sample is ${social.sentimentUpPct.toFixed(0)}% up-votes (${social.heatLabel} heat).`,
     );
@@ -338,8 +361,6 @@ export async function fetchCoinIntel(input: {
     notice,
     hasSocialLinks: Boolean(input.hasSocialLinks),
   });
-
-  if (sources.length === 0) sources.push("No social/news feeds matched");
 
   return {
     symbol: ticker,

@@ -21,7 +21,7 @@ export function WalletNarrativeCard({
           <div>
             <p className="text-[13px] font-medium text-white">Priple Narrative</p>
             <p className="mt-0.5 font-mono text-[10px] text-zinc-600">
-              Grounded briefing · not a prediction
+              This window’s feeds · not a prediction
             </p>
           </div>
         </div>

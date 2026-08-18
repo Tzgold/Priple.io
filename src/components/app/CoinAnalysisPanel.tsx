@@ -244,7 +244,9 @@ export function CoinAnalysisPanel({
                         : "border-white/10 text-zinc-500",
                   )}
                 >
-                  Heat · {analysis.intel.social.heatLabel} · {analysis.intel.social.heat}
+                  {analysis.intel.social.heatLabel === "unknown"
+                    ? "Heat · no data"
+                    : `Heat · ${analysis.intel.social.heatLabel}${analysis.intel.social.heat != null ? ` · ${analysis.intel.social.heat}` : ""}`}
                 </span>
               </div>
 

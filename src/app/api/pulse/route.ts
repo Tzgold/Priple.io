@@ -8,7 +8,7 @@ import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
 import { requireSession } from "@/lib/session";
 import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG } from "@/lib/token-routes";
 
-function demoPulse(source: "market" | "personal"): PulseItem[] {
+function demoPulse(): PulseItem[] {
   return mockMoves.map((move) => {
     const cg = SYMBOL_TO_CG[move.asset.toUpperCase()];
     const route = cg ? MAJOR_TOKEN_ROUTES[cg] : null;
@@ -29,7 +29,7 @@ function demoPulse(source: "market" | "personal"): PulseItem[] {
       date: move.date,
       status: move.status,
       type: move.type,
-      source: source === "personal" ? "personal" : "demo",
+      source: "demo" as const,
       tokenAddress,
       network,
     };
@@ -74,23 +74,23 @@ export async function GET(request: Request) {
   }));
 
   try {
-    // Harvest alerts from all of the user's tracked desks (every supported chain).
+    // Harvest alerts from tracked wallets only — never demo tape, never curated desks.
     let personalItems: PulseItem[] = [];
+    let alertsCreated = 0;
     if (tracked.length > 0) {
       personalItems = await buildPulseForWallets(tracked, "personal");
-      await maybeSyncAlerts(session.user.id, personalItems);
+      alertsCreated = await maybeSyncAlerts(session.user.id, personalItems);
     }
 
     if (mode === "personal") {
-      const items = personalItems.length > 0 ? personalItems : demoPulse("personal");
       return NextResponse.json({
         mode,
         personalReady,
         trackedCount: saved.length,
         threshold: PERSONAL_PULSE_THRESHOLD,
         live: personalItems.length > 0,
-        alertsCreated: personalItems.length > 0,
-        items,
+        alertsCreated,
+        items: personalItems,
       });
     }
 
@@ -103,12 +103,7 @@ export async function GET(request: Request) {
       "market",
     );
 
-    // Empty desk: seed inbox from significant market pulse so alerts feel live.
-    if (tracked.length === 0 && marketItems.length > 0) {
-      await maybeSyncAlerts(session.user.id, marketItems);
-    }
-
-    const items = marketItems.length > 0 ? marketItems : demoPulse("market");
+    const items = marketItems.length > 0 ? marketItems : demoPulse();
     return NextResponse.json({
       mode,
       personalReady,
@@ -130,7 +125,7 @@ export async function GET(request: Request) {
       trackedCount: saved.length,
       threshold: PERSONAL_PULSE_THRESHOLD,
       live: false,
-      items: demoPulse(mode),
+      items: mode === "personal" ? [] : demoPulse(),
     });
   }
 }

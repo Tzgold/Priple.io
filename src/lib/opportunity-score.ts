@@ -164,27 +164,31 @@ function scoreRisk(input: OpportunityInputs): OpportunityDimension {
 function scoreSocial(input: OpportunityInputs): OpportunityDimension {
   let value = input.hasSocials ? 52 : 28;
   const parts: string[] = [];
+  const headlines = input.headlineCount ?? 0;
+  const followers = input.twitterFollowers;
+  const sentiment = input.sentimentUpPct;
+  const hasCrowd =
+    sentiment != null || (followers != null && followers > 0) || headlines > 0;
 
   if (input.hasSocials) {
     parts.push("public web / social links found");
     value += 8;
+  } else if (!hasCrowd) {
+    parts.push("no crowd or news data");
   } else {
     parts.push("little verified social presence");
   }
 
-  const sentiment = input.sentimentUpPct;
   if (sentiment != null) {
     value += (sentiment - 50) * 0.35;
     parts.push(`CG sentiment ${sentiment.toFixed(0)}% up`);
   }
 
-  const followers = input.twitterFollowers;
   if (followers != null && followers > 10_000) {
     value += Math.min(12, Math.log10(followers) * 3);
     parts.push(`${followers >= 1_000_000 ? `${(followers / 1_000_000).toFixed(1)}M` : `${Math.round(followers / 1000)}k`} X followers`);
   }
 
-  const headlines = input.headlineCount ?? 0;
   if (headlines > 0) {
     value += Math.min(10, headlines * 2);
     parts.push(`${headlines} recent headline${headlines === 1 ? "" : "s"}`);

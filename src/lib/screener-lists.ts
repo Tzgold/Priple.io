@@ -43,6 +43,7 @@ export function buildScreenerLists(
   const walletBuys: ScreenerListCoin[] = [];
   const seen = new Set<string>();
   for (const item of pulseBuys) {
+    if (item.source === "demo") continue;
     const route = resolvePulseBuy(item);
     if (!route) continue;
     const id = `${route.network}:${route.address.toLowerCase()}`;
@@ -61,7 +62,10 @@ export function buildScreenerLists(
       score: fromBoard?.score ?? null,
       priceUsd: fromBoard?.priceUsd ?? null,
       marketCapUsd: fromBoard?.marketCapUsd ?? null,
-      whyHere: `Tracked wallet “${item.walletLabel}” bought ${item.amount} ${item.asset} (${item.usd}) — ${item.date} ${item.time}.`,
+      whyHere:
+        item.source === "personal"
+          ? `Tracked wallet “${item.walletLabel}” bought ${item.amount} ${item.asset} (${item.usd}) — ${item.date} ${item.time}.`
+          : `Curated desk “${item.walletLabel}” bought ${item.amount} ${item.asset} (${item.usd}) — ${item.date} ${item.time}.`,
       walletAddress: item.walletAddress || null,
       walletLabel: item.walletLabel,
     });

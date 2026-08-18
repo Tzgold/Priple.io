@@ -38,7 +38,9 @@ export function useScreenerBoard(options?: { enabled?: boolean }) {
 
         if (pulseRes.ok) {
           const data = (await pulseRes.json()) as { items?: PulseItem[] };
-          setPulseBuys((data.items ?? []).filter((item) => item.type === "buy"));
+          setPulseBuys(
+            (data.items ?? []).filter((item) => item.type === "buy" && item.source !== "demo"),
+          );
         }
       } catch {
         // keep empty

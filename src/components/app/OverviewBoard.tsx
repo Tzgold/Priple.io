@@ -132,10 +132,13 @@ export function OverviewBoard() {
       let bestCount = -1;
       for (const wallet of trackedWallets) {
         const addr = (wallet.fullAddress || wallet.address).toLowerCase();
-        const count = items.filter(
-          (item) =>
-            item.walletAddress.toLowerCase() === addr || item.walletLabel === wallet.label,
-        ).length;
+        const usableAddress = addr.length >= 8 && !addr.includes("…");
+        const count = items.filter((item) => {
+          if (usableAddress) {
+            return item.walletAddress.toLowerCase() === addr;
+          }
+          return item.walletLabel === wallet.label;
+        }).length;
         if (count > bestCount) {
           best = wallet;
           bestCount = count;
@@ -164,13 +167,19 @@ export function OverviewBoard() {
             </p>
             <h2 className="mt-2 max-w-xl font-sans text-[1.85rem] font-semibold leading-tight tracking-[-0.03em] text-white sm:text-[2.15rem]">
               {mode === "personal"
-                ? "What your desks did while you were away"
+                ? live
+                  ? "What your desks did while you were away"
+                  : "Your desks were quiet in this window"
                 : "What smart money did while you were away"}
             </h2>
             <p className="mt-3 max-w-lg font-mono text-[12px] leading-5 text-zinc-400">
               {mode === "personal"
-                ? "Live transfers across wallets you track."
-                : `Curated desks until you own the board — track ${remaining || pulseThreshold} wallet${remaining === 1 ? "" : "s"} to flip this to your radar.`}
+                ? live
+                  ? "Live transfers across wallets you track."
+                  : "No live transfers in this window for wallets you track."
+                : live
+                  ? "Curated desks until you own the board."
+                  : `Demo tape until feeds return — track ${remaining || pulseThreshold} wallet${remaining === 1 ? "" : "s"} to flip this to your radar.`}
             </p>
           </div>
 
@@ -206,7 +215,9 @@ export function OverviewBoard() {
           </p>
         ) : dates.length === 0 ? (
           <p className="py-10 text-center font-mono text-[12px] text-zinc-600">
-            No pulse yet. Add an ETH wallet to seed your desk.
+            {mode === "personal"
+              ? "No live transfers in the last window for wallets you track."
+              : "No pulse yet. Add an ETH wallet to seed your desk."}
           </p>
         ) : (
           dates.map((date) => (
