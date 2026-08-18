@@ -81,6 +81,18 @@ type AvatarSpot = {
   overflow?: number;
 };
 
+type NewsSpot = {
+  key: string;
+  left: number;
+  top: number;
+  title: string;
+};
+
+export type ChartIntelEvent = {
+  time: number;
+  title: string;
+};
+
 const MAX_VISIBLE_PER_SIDE = 3;
 const AVATAR = 28;
 const STACK_GAP = 10;
@@ -88,11 +100,13 @@ const STACK_GAP = 10;
 export function TokenCandleChart({
   candles,
   marks = [],
+  events = [],
   focusTime = null,
   heightClass = "h-[380px] w-full sm:h-[460px]",
 }: {
   candles: Candle[];
   marks?: WalletChartMark[];
+  events?: ChartIntelEvent[];
   focusTime?: number | null;
   heightClass?: string;
 }) {
@@ -102,6 +116,7 @@ export function TokenCandleChart({
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const cleanedRef = useRef<Candle[]>([]);
   const [spots, setSpots] = useState<AvatarSpot[]>([]);
+  const [newsSpots, setNewsSpots] = useState<NewsSpot[]>([]);
   const [hoverOhlc, setHoverOhlc] = useState<{
     o: number;
     h: number;
@@ -309,6 +324,27 @@ export function TokenCandleChart({
       }
 
       setSpots(next);
+
+      const newsNext: NewsSpot[] = [];
+      const minT = candleTimes[0];
+      const maxT = candleTimes[candleTimes.length - 1];
+      for (const event of events) {
+        if (minT == null || maxT == null) break;
+        if (event.time < minT - 3600 || event.time > maxT + 3600) continue;
+        const snapped = snapMarkTime(event.time, candleTimes);
+        const candle = candleIndex.get(snapped);
+        if (!candle) continue;
+        const x = chart.timeScale().timeToCoordinate(snapped as UTCTimestamp);
+        const y = series.priceToCoordinate(candle.high);
+        if (x == null || y == null) continue;
+        newsNext.push({
+          key: `${snapped}-${event.title}`,
+          left: x,
+          top: y - 14,
+          title: event.title,
+        });
+      }
+      setNewsSpots(newsNext);
     };
 
     layout();
@@ -324,7 +360,7 @@ export function TokenCandleChart({
       window.removeEventListener("resize", layout);
       window.clearInterval(timer);
     };
-  }, [marks, focusTime, candleIndex, candles]);
+  }, [marks, events, focusTime, candleIndex, candles]);
 
   function fmt(n: number) {
     if (!Number.isFinite(n)) return "—";
@@ -418,6 +454,14 @@ export function TokenCandleChart({
             </div>
           );
         })}
+        {newsSpots.map((spot) => (
+          <div
+            key={spot.key}
+            title={spot.title}
+            className="pointer-events-auto absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.18)]"
+            style={{ left: spot.left, top: spot.top, zIndex: 18 }}
+          />
+        ))}
       </div>
     </div>
   );

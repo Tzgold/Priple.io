@@ -17,16 +17,19 @@ const WATCH_TOKENS_KEY = "priple-watched-tokens-v1";
 
 export type WalletSort = "score" | "pnl" | "name";
 export type ScreenerFilter = "All" | "Trending" | "Whales buying" | "Social spike";
+export type ChartPref = "dexscreener" | "priple";
 
 type DeskPrefs = {
   sort: WalletSort;
   emailAlerts: boolean;
+  defaultChart: ChartPref;
   dismissedMockAlertIds: string[];
 };
 
 const defaultPrefs: DeskPrefs = {
   sort: "score",
   emailAlerts: true,
+  defaultChart: "dexscreener",
   dismissedMockAlertIds: [],
 };
 
@@ -44,6 +47,7 @@ type DeskContextValue = {
   moves: typeof mockMoves;
   sort: WalletSort;
   emailAlerts: boolean;
+  defaultChart: ChartPref;
   ready: boolean;
   addWallet: (input: { label: string; address: string; chain: string }) => Promise<void>;
   removeWallet: (id: string) => Promise<void>;
@@ -51,6 +55,7 @@ type DeskContextValue = {
   addAlert: (input: { title: string; detail: string; type: AlertItem["type"] }) => Promise<void>;
   dismissAlert: (id: string) => Promise<void>;
   setEmailAlerts: (value: boolean) => void;
+  setDefaultChart: (value: ChartPref) => void;
   refreshAlerts: () => Promise<void>;
   isTokenWatched: (network: string, address: string) => boolean;
   toggleWatchToken: (token: Omit<WatchedToken, "id" | "addedAt">) => void;
@@ -70,7 +75,11 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       const raw = window.localStorage.getItem(PREFS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<DeskPrefs>;
-        setPrefs({ ...defaultPrefs, ...parsed });
+        setPrefs({
+          ...defaultPrefs,
+          ...parsed,
+          defaultChart: parsed.defaultChart === "priple" ? "priple" : "dexscreener",
+        });
       }
       const watchRaw = window.localStorage.getItem(WATCH_TOKENS_KEY);
       if (watchRaw) {
@@ -97,9 +106,10 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
 
     async function load() {
       try {
-        const [walletsRes, alertsRes] = await Promise.all([
+        const [walletsRes, alertsRes, settingsRes] = await Promise.all([
           fetch("/api/wallets", { credentials: "include" }),
           fetch("/api/alerts", { credentials: "include" }),
+          fetch("/api/settings", { credentials: "include" }),
         ]);
 
         if (!cancelled && walletsRes.ok) {
@@ -110,6 +120,17 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled && alertsRes.ok) {
           const data = (await alertsRes.json()) as { alerts: AlertItem[] };
           setSavedAlerts(data.alerts ?? []);
+        }
+
+        if (!cancelled && settingsRes.ok) {
+          const data = (await settingsRes.json()) as {
+            settings?: { emailAlerts?: boolean; defaultChart?: ChartPref };
+          };
+          setPrefs((current) => ({
+            ...current,
+            emailAlerts: data.settings?.emailAlerts ?? current.emailAlerts,
+            defaultChart: data.settings?.defaultChart === "priple" ? "priple" : "dexscreener",
+          }));
         }
       } catch {
         // offline
@@ -191,6 +212,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       moves: mockMoves,
       sort: prefs.sort,
       emailAlerts: prefs.emailAlerts,
+      defaultChart: prefs.defaultChart,
       ready,
       addWallet: async ({ label, address, chain }) => {
         const res = await fetch("/api/wallets", {
@@ -248,6 +270,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
         }));
       },
       setEmailAlerts: (emailAlerts) => setPrefs((current) => ({ ...current, emailAlerts })),
+      setDefaultChart: (defaultChart) => setPrefs((current) => ({ ...current, defaultChart })),
       refreshAlerts,
       isTokenWatched,
       toggleWatchToken,
@@ -262,6 +285,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       watchedTokens,
       prefs.sort,
       prefs.emailAlerts,
+      prefs.defaultChart,
       ready,
       savedWallets,
       refreshAlerts,

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Copy, ExternalLink, Globe, MessageCircle, Star } from "lucide-react";
 import { TokenCandleChart } from "@/components/app/TokenCandleChart";
+import { CoinIntelTape, buildIntelTape } from "@/components/app/CoinIntelTape";
 import { DexScreenerChart } from "@/components/app/DexScreenerChart";
 import { TradingViewAdvancedChart } from "@/components/app/TradingViewAdvancedChart";
 import { TokenMark } from "@/components/app/TokenMark";
@@ -15,6 +16,7 @@ import {
   toDexScreenerChain,
   type DexPoolOption,
 } from "@/lib/dexscreener";
+import type { CoinIntel } from "@/lib/coin-intel";
 import type { Candle, TokenDesk, TokenTrade } from "@/lib/geckoterminal";
 import { TV_SYMBOL_BY_CG } from "@/lib/token-routes";
 import type { WalletChartMark } from "@/lib/wallet-dossier";
@@ -109,7 +111,7 @@ export function TokenDeskView({
   trackSide?: "buy" | "sell" | null;
   trackWhy?: string | null;
 }) {
-  const { isTokenWatched, toggleWatchToken, trackedWallets } = useDesk();
+  const { isTokenWatched, toggleWatchToken, trackedWallets, defaultChart } = useDesk();
   const [interval, setIntervalKey] = useState<IntervalKey>("15m");
   const [token, setToken] = useState<LoadedDesk | null>(null);
   const [base1m, setBase1m] = useState<Candle[]>([]);
@@ -129,6 +131,8 @@ export function TokenDeskView({
   const [poolOptions, setPoolOptions] = useState<DexPoolOption[]>([]);
   const [walletMarks, setWalletMarks] = useState<WalletChartMark[]>([]);
   const [marksNote, setMarksNote] = useState<string | null>(null);
+  const [intel, setIntel] = useState<CoinIntel | null>(null);
+  const [loadingIntel, setLoadingIntel] = useState(false);
 
   const cfg = intervals[interval];
   const tvSymbol =
@@ -179,15 +183,26 @@ export function TokenDeskView({
 
   const trackingActive = Boolean(trackWallet);
 
+  const tapeItems = useMemo(
+    () => buildIntelTape({ headlines: intel?.headlines, marks: walletMarks }),
+    [intel?.headlines, walletMarks],
+  );
+
+  const chartEvents = useMemo(
+    () => (intel?.headlines ?? []).map((row) => ({ time: row.timeSec, title: row.title })),
+    [intel],
+  );
+
   useEffect(() => {
     if (trackingActive) {
       setChartMode("lightweight");
       return;
     }
     if (tvSymbol) setChartMode("tradingview");
+    else if (defaultChart === "priple") setChartMode("lightweight");
     else if (canDexScreener) setChartMode("dexscreener");
     else setChartMode("lightweight");
-  }, [tvSymbol, canDexScreener, network, address, trackingActive]);
+  }, [tvSymbol, canDexScreener, network, address, trackingActive, defaultChart]);
 
   // Soft refresh of Dex stats while the desk is open (keeps header live without hammering GT).
   useEffect(() => {
@@ -328,6 +343,41 @@ export function TokenDeskView({
     trackedWallets,
     token?.symbol,
   ]);
+
+  useEffect(() => {
+    if (network !== "coingecko" && !token?.symbol) return;
+
+    let cancelled = false;
+    setLoadingIntel(true);
+    setIntel(null);
+
+    const qs = new URLSearchParams({ network, address });
+    const symbol = token?.symbol;
+    if (symbol) qs.set("symbol", symbol);
+    if (token?.coingeckoId) qs.set("cg", token.coingeckoId);
+    else if (network === "coingecko") qs.set("cg", address);
+    const socials = token?.info?.socials || token?.socials;
+    if (socials?.twitter || socials?.telegram || (socials?.websites?.length ?? 0) > 0) {
+      qs.set("social", "1");
+    }
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/token/intel?${qs.toString()}`, { credentials: "include" });
+        const data = (await res.json()) as { intel?: CoinIntel };
+        if (cancelled) return;
+        setIntel(data.intel ?? null);
+      } catch {
+        if (!cancelled) setIntel(null);
+      } finally {
+        if (!cancelled) setLoadingIntel(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [network, address, token?.symbol, token?.coingeckoId, token?.info?.socials, token?.socials]);
 
   useEffect(() => {
     let cancelled = false;
@@ -611,6 +661,13 @@ export function TokenDeskView({
 
   const socials = token?.info?.socials || token?.socials || null;
   const watched = isTokenWatched(network, address);
+  const liqMcapLabel =
+    token?.liquidityUsd != null && mcap.value != null && mcap.value > 0
+      ? `${((token.liquidityUsd / mcap.value) * 100).toFixed(1)}%`
+      : "—";
+  const security = token?.info?.security;
+  const honeypot =
+    security?.isHoneypot === true || security?.isHoneypot === "true";
   const dexPageUrl =
     dsPairUrl ||
     dexScreenerPairPageUrl(
@@ -710,8 +767,8 @@ export function TokenDeskView({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-x-6">
-            <HeaderStat label="Market cap" value={money(mcap.value)} />
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-6">
+            <HeaderStat label={mcap.label} value={money(mcap.value)} />
             <HeaderStat
               label="Price"
               value={money(token?.priceUsd)}
@@ -728,7 +785,36 @@ export function TokenDeskView({
             />
             <HeaderStat label="24H Vol." value={money(token?.volume24hUsd)} />
             <HeaderStat label="Liquidity" value={money(token?.liquidityUsd)} />
+            <HeaderStat label="Liq / MCap" value={liqMcapLabel} />
           </div>
+          {security && (honeypot || security.gtScore != null || security.mintAuthority) ? (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {honeypot ? (
+                <span className="rounded-full border border-rose-500/30 px-2.5 py-1 font-mono text-[10px] text-rose-300">
+                  Honeypot flag
+                </span>
+              ) : null}
+              {security.gtScore != null ? (
+                <span className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-zinc-300">
+                  GT {security.gtScore.toFixed(0)}/100
+                </span>
+              ) : null}
+              {security.mintAuthority &&
+              security.mintAuthority !== "false" &&
+              security.mintAuthority !== "null" ? (
+                <span className="rounded-full border border-amber-500/30 px-2.5 py-1 font-mono text-[10px] text-amber-200">
+                  Mint authority
+                </span>
+              ) : null}
+              {security.freezeAuthority &&
+              security.freezeAuthority !== "false" &&
+              security.freezeAuthority !== "null" ? (
+                <span className="rounded-full border border-amber-500/30 px-2.5 py-1 font-mono text-[10px] text-amber-200">
+                  Freeze authority
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -832,7 +918,7 @@ export function TokenDeskView({
                   DexScreener
                 </button>
               ) : null}
-              {trackingActive || (!tvSymbol && !canDexScreener) ? (
+              {canDexScreener || trackingActive || !tvSymbol ? (
                 <button
                   type="button"
                   onClick={() => setChartMode("lightweight")}
@@ -959,7 +1045,7 @@ export function TokenDeskView({
             key={`${network}-${dexChartAddress}`}
             network={token?.network || network}
             pairOrTokenAddress={dexChartAddress}
-            heightClass={compact ? "h-[420px] w-full sm:h-[520px]" : "h-[460px] w-full sm:h-[560px]"}
+            heightClass={compact ? "h-[460px] w-full sm:h-[560px]" : "h-[480px] w-full sm:h-[580px]"}
           />
         ) : loadingCandles && candles.length === 0 ? (
           <p className="px-4 py-20 text-center font-mono text-[12px] text-zinc-600">
@@ -974,11 +1060,14 @@ export function TokenDeskView({
             key={`${network}-${address}-${interval}-${candles[0]?.time ?? 0}-${candles.length}-${walletMarks.length}`}
             candles={candles}
             marks={walletMarks}
+            events={chartEvents}
             focusTime={trackFocusTime}
             heightClass={compact ? "h-[320px] w-full sm:h-[380px]" : "h-[380px] w-full sm:h-[460px]"}
           />
         )}
       </section>
+
+      <CoinIntelTape items={tapeItems} loading={loadingIntel} />
 
       <section className="rounded-[20px] border border-white/[0.08] bg-black/30">
         <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
