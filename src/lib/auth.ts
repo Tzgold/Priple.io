@@ -92,6 +92,17 @@ const baseUrl = (
   "http://localhost:3000"
 ).replace(/\/$/, "");
 
+const extraOrigins = [
+  process.env.NEXT_PUBLIC_APP_URL,
+  process.env.AUTH_TRUSTED_ORIGINS,
+]
+  .flatMap((raw) =>
+    (raw || "")
+      .split(",")
+      .map((value) => value.trim().replace(/\/$/, ""))
+      .filter((value) => /^https?:\/\//i.test(value)),
+  );
+
 const trustedOrigins = Array.from(
   new Set(
     [
@@ -101,9 +112,22 @@ const trustedOrigins = Array.from(
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
         : null,
       isProd() ? null : "http://localhost:3000",
+      ...extraOrigins,
     ].filter(Boolean) as string[],
   ),
 );
+
+function hostnameOf(url: string) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+const cookieHost = hostnameOf(baseUrl);
+const onPublicSuffixHost =
+  cookieHost.endsWith(".vercel.app") || cookieHost === "vercel.app";
 
 export const auth = betterAuth({
   database: createAuthDatabase(),
@@ -139,11 +163,11 @@ export const auth = betterAuth({
     // Persist OAuth state in Postgres so serverless instances share it.
     storeStateStrategy: "database",
     /**
-     * `.vercel.app` is on the public suffix list — browsers often drop/block the
-     * secondary OAuth state cookie. State is still validated via the DB record.
-     * Prefer a custom domain later, then you can set this back to false.
+     * `.vercel.app` is on the public suffix list — browsers often drop the
+     * OAuth state cookie. Custom domains can validate the cookie normally.
      */
-    skipStateCookieCheck: true,
+    skipStateCookieCheck:
+      onPublicSuffixHost || process.env.AUTH_SKIP_STATE_COOKIE === "1",
     accountLinking: {
       enabled: true,
       trustedProviders: ["google"],

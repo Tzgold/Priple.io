@@ -32,10 +32,16 @@ function SocialButton({
   );
 }
 
+function currentOrigin() {
+  if (typeof window === "undefined") return "";
+  return window.location.origin.replace(/\/$/, "");
+}
+
 function oauthErrorMessage(code: string | null) {
   if (!code) return null;
+  const origin = currentOrigin() || "this host";
   if (code === "state_mismatch" || code === "state_security_mismatch") {
-    return "Google sign-in could not complete (session state lost). Try again once. If it keeps failing, confirm BETTER_AUTH_URL is https://priple.vercel.app and Google redirect URI matches.";
+    return `Google sign-in could not complete (session state lost). Try again once. Confirm BETTER_AUTH_URL is ${origin} and Google redirect URI is ${origin}/api/auth/callback/google.`;
   }
   if (code === "access_denied") return "Google sign-in was cancelled.";
   return `Sign-in error: ${code}`;
@@ -66,7 +72,7 @@ function LoginForm() {
           onError: (ctx) => {
             setError(
               ctx.error.message ??
-                "Google sign-in failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google and BETTER_AUTH_URL matches.",
+                `Google sign-in failed. Confirm Google OAuth redirect URI is ${currentOrigin() || "this host"}/api/auth/callback/google and BETTER_AUTH_URL matches.`,
             );
             setPending(false);
           },
@@ -74,7 +80,7 @@ function LoginForm() {
       });
     } catch {
       setError(
-        "Google sign-in failed. Confirm Google OAuth redirect URI is https://priple.vercel.app/api/auth/callback/google and BETTER_AUTH_URL matches.",
+        `Google sign-in failed. Confirm Google OAuth redirect URI is ${currentOrigin() || "this host"}/api/auth/callback/google and BETTER_AUTH_URL matches.`,
       );
       setPending(false);
     }
