@@ -64,3 +64,34 @@ export function createAuthDatabase() {
   }
   return getPgPool();
 }
+
+const PUBLIC_TABLE = /^[a-z_][a-z0-9_]*$/i;
+
+/**
+ * Priple never uses the Supabase Data API. Every public table must:
+ * - have RLS on (blocks anon/authenticated even if grants leak)
+ * - revoke grants from anon, authenticated, and PUBLIC
+ *
+ * The server DATABASE_URL role (postgres) bypasses RLS, so the app keeps working.
+ */
+export async function lockPublicTable(table: string) {
+  if (!PUBLIC_TABLE.test(table)) {
+    throw new Error(`Refusing to lock invalid table name: ${table}`);
+  }
+
+  const pool = getPgPool();
+  await pool.query(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
+  await pool.query(`REVOKE ALL ON TABLE public.${table} FROM PUBLIC`);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        EXECUTE 'REVOKE ALL ON TABLE public.${table} FROM anon';
+      END IF;
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        EXECUTE 'REVOKE ALL ON TABLE public.${table} FROM authenticated';
+      END IF;
+    END
+    $$;
+  `);
+}

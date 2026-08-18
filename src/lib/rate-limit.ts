@@ -1,4 +1,4 @@
-import { getPgPool } from "@/lib/db";
+import { getPgPool, lockPublicTable } from "@/lib/db";
 
 type RateLimitResult =
   | { ok: true; remaining: number }
@@ -15,6 +15,7 @@ async function ensureRateLimitTable() {
       window_starts_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await lockPublicTable("api_rate_limits");
   ensured.ready = true;
 }
 

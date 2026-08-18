@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { captcha } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
-import { createAuthDatabase, getPgPool } from "@/lib/db";
+import { createAuthDatabase, getPgPool, lockPublicTable } from "@/lib/db";
 import { sendResetPasswordEmail, sendVerificationEmail } from "@/lib/email";
 
 function isProd() {
@@ -53,6 +53,7 @@ async function ensureAuthVerificationTable() {
       CREATE INDEX IF NOT EXISTS verification_identifier_idx
       ON verification (identifier)
     `);
+    await lockPublicTable("verification");
   } catch (error) {
     console.error(
       "[auth] verification table ensure failed:",

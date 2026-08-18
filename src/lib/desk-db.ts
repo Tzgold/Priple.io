@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { getPgPool } from "@/lib/db";
+import { getPgPool, lockPublicTable } from "@/lib/db";
 import {
   DESK_CHAINS,
   chainAssetSymbol,
@@ -83,6 +83,7 @@ async function ensureAlertRulesTable() {
     CREATE INDEX IF NOT EXISTS alert_rules_user_idx
     ON public.alert_rules (user_id)
   `);
+  await lockPublicTable("alert_rules");
   alertRulesReady = true;
 }
 
@@ -310,6 +311,7 @@ async function ensureUserSettingsTable() {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await lockPublicTable("user_settings");
   userSettingsReady = true;
 }
 
