@@ -28,6 +28,9 @@ export type OpportunityInputs = {
   trackedWalletBuys?: number;
   /** User opened coin from a tracked-wallet buy rail. */
   hasWhyHere?: boolean;
+  sentimentUpPct?: number | null;
+  twitterFollowers?: number | null;
+  headlineCount?: number;
 };
 
 function clamp(value: number, min = 0, max = 100) {
@@ -159,18 +162,36 @@ function scoreRisk(input: OpportunityInputs): OpportunityDimension {
 }
 
 function scoreSocial(input: OpportunityInputs): OpportunityDimension {
-  let value = input.hasSocials ? 58 : 32;
+  let value = input.hasSocials ? 52 : 28;
   const parts: string[] = [];
 
   if (input.hasSocials) {
     parts.push("public web / social links found");
-    value += 12;
+    value += 8;
   } else {
     parts.push("little verified social presence");
   }
 
-  if (input.gtScore != null) {
-    value = clamp(value * 0.4 + input.gtScore * 0.6);
+  const sentiment = input.sentimentUpPct;
+  if (sentiment != null) {
+    value += (sentiment - 50) * 0.35;
+    parts.push(`CG sentiment ${sentiment.toFixed(0)}% up`);
+  }
+
+  const followers = input.twitterFollowers;
+  if (followers != null && followers > 10_000) {
+    value += Math.min(12, Math.log10(followers) * 3);
+    parts.push(`${followers >= 1_000_000 ? `${(followers / 1_000_000).toFixed(1)}M` : `${Math.round(followers / 1000)}k`} X followers`);
+  }
+
+  const headlines = input.headlineCount ?? 0;
+  if (headlines > 0) {
+    value += Math.min(10, headlines * 2);
+    parts.push(`${headlines} recent headline${headlines === 1 ? "" : "s"}`);
+  }
+
+  if (input.gtScore != null && sentiment == null && headlines === 0) {
+    value = clamp(value * 0.55 + input.gtScore * 0.45);
     if (!input.hasSocials) parts.push(`GT score ${input.gtScore.toFixed(0)}/100`);
   }
 

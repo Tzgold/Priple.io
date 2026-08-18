@@ -1,4 +1,5 @@
 import { estimateMarketCap } from "@/lib/candle-math";
+import { fetchCoinIntel, type CoinIntel } from "@/lib/coin-intel";
 import { fetchDexScreenerEnrichment } from "@/lib/dexscreener";
 import { fetchTokenDesk, type TokenDesk } from "@/lib/geckoterminal";
 import { computeOpportunityScore, type OpportunityResult } from "@/lib/opportunity-score";
@@ -43,6 +44,7 @@ export type CoinAnalysis = {
   };
   whyHere: string | null;
   opportunity: OpportunityResult | null;
+  intel: CoinIntel | null;
   sources: string[];
   generatedAt: string;
 };
@@ -164,8 +166,15 @@ export async function buildCoinAnalysis(input: {
   let desk: TokenDesk | null = null;
 
   if (input.network === "coingecko") {
+    const intel = await fetchCoinIntel({
+      network: "coingecko",
+      address: input.address,
+      coingeckoId: input.address,
+      symbol: input.address,
+      hasSocialLinks: false,
+    });
     return {
-      symbol: input.address.toUpperCase(),
+      symbol: (intel.symbol || input.address).toUpperCase(),
       name: input.address,
       network: "coingecko",
       address: input.address,
@@ -173,7 +182,8 @@ export async function buildCoinAnalysis(input: {
       summary: [
         "This asset is routed through CoinGecko / CEX-style data.",
         "Prefer the TradingView lane for price action; pair this with your watchlist and wallet pulse for context.",
-      ],
+        ...intel.pulse.slice(0, 2),
+      ].slice(0, 6),
       market: {
         priceLabel: "—",
         mcapLabel: "—",
@@ -195,11 +205,15 @@ export async function buildCoinAnalysis(input: {
       opportunity: computeOpportunityScore({
         change24h: null,
         riskLevel: "unknown",
-        hasSocials: false,
+        hasSocials: intel.social.twitterFollowers != null || intel.headlines.length > 0,
         hasWhyHere: Boolean(input.whyHere),
         trackedWalletBuys: input.whyHere ? 1 : 0,
+        sentimentUpPct: intel.social.sentimentUpPct,
+        twitterFollowers: intel.social.twitterFollowers,
+        headlineCount: intel.headlines.length,
       }),
-      sources: ["CoinGecko", "TradingView"],
+      intel,
+      sources: ["CoinGecko", "TradingView", ...intel.sources],
       generatedAt: new Date().toISOString(),
     };
   }
@@ -310,6 +324,19 @@ export async function buildCoinAnalysis(input: {
       (info?.socials.websites?.length ?? 0) > 0,
   );
 
+  const intel = await fetchCoinIntel({
+    network: input.network,
+    address: input.address,
+    coingeckoId: merged.coingeckoId,
+    symbol: merged.symbol,
+    hasSocialLinks: hasSocials,
+  });
+  if (intel.sources.length > 0) {
+    for (const source of intel.sources) {
+      if (!sources.includes(source)) sources.push(source);
+    }
+  }
+
   const opportunity = computeOpportunityScore({
     change24h: change,
     volume24hUsd: merged.volume24hUsd,
@@ -321,6 +348,9 @@ export async function buildCoinAnalysis(input: {
     holderTop10Pct: merged.info?.holders.top10Pct ?? null,
     hasWhyHere: Boolean(input.whyHere),
     trackedWalletBuys: input.trackedWalletBuys ?? (input.whyHere ? 1 : 0),
+    sentimentUpPct: intel.social.sentimentUpPct,
+    twitterFollowers: intel.social.twitterFollowers,
+    headlineCount: intel.headlines.length,
   });
 
   return {
@@ -359,6 +389,7 @@ export async function buildCoinAnalysis(input: {
     },
     whyHere: input.whyHere ?? null,
     opportunity,
+    intel,
     sources,
     generatedAt: new Date().toISOString(),
   };

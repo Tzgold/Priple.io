@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Droplets, Globe, Radio, Shield, Users } from "lucide-react";
+import { AlertTriangle, Droplets, Globe, Newspaper, Radio, Shield, Users } from "lucide-react";
 import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
 import { cn } from "@/lib/cn";
 import type { CoinAnalysis } from "@/lib/coin-analysis";
@@ -15,6 +15,21 @@ function safeHttpUrl(value: string | null | undefined) {
   } catch {
     return null;
   }
+}
+
+function formatCount(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  return String(Math.round(value));
+}
+
+function relativeHeadline(iso: string) {
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (mins < 60) return `${Math.max(1, mins)}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 export function CoinAnalysisPanel({
@@ -212,6 +227,73 @@ export function CoinAnalysisPanel({
             </p>
           </div>
           </div>
+
+          {analysis.intel ? (
+            <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                  <Newspaper className="h-3 w-3" /> Social + news
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase",
+                    analysis.intel.social.heatLabel === "hot"
+                      ? "border-teal-500/30 text-teal-300"
+                      : analysis.intel.social.heatLabel === "warming"
+                        ? "border-amber-500/30 text-amber-200"
+                        : "border-white/10 text-zinc-500",
+                  )}
+                >
+                  Heat · {analysis.intel.social.heatLabel} · {analysis.intel.social.heat}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Mini label="X followers" value={formatCount(analysis.intel.social.twitterFollowers)} />
+                <Mini label="Reddit" value={formatCount(analysis.intel.social.redditSubscribers)} />
+                <Mini
+                  label="Sentiment"
+                  value={
+                    analysis.intel.social.sentimentUpPct != null
+                      ? `${analysis.intel.social.sentimentUpPct.toFixed(0)}% up`
+                      : "—"
+                  }
+                />
+                <Mini
+                  label="Headlines"
+                  value={String(analysis.intel.headlines.length || "—")}
+                />
+              </div>
+
+              <ul className="mt-3 space-y-2">
+                {analysis.intel.pulse.map((line) => (
+                  <li key={line} className="font-mono text-[12px] leading-5 text-zinc-300">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+
+              {analysis.intel.headlines.length > 0 ? (
+                <ul className="mt-3 space-y-1.5 border-t border-white/[0.06] pt-3">
+                  {analysis.intel.headlines.slice(0, 4).map((row) => (
+                    <li key={row.id}>
+                      <a
+                        href={row.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-xl px-1 py-1 hover:bg-white/[0.03]"
+                      >
+                        <p className="truncate font-mono text-[12px] text-zinc-200">{row.title}</p>
+                        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-zinc-600">
+                          {row.source} · {relativeHeadline(row.publishedAt)}
+                        </p>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : loading ? (
         <p className="mt-6 font-mono text-[12px] text-zinc-600">Building brief…</p>
