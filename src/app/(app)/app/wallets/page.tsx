@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/app/DashboardShell";
 import { TokenMark } from "@/components/app/TokenMark";
 import { CopyButton } from "@/components/app/CopyButton";
+import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { useAddWallet } from "@/components/app/WalletModalProvider";
 import { useDesk } from "@/lib/app-store";
 import { cn } from "@/lib/cn";
+import type { FlowCluster } from "@/lib/flows";
+import { buildWalletNarrative } from "@/lib/wallet-narrative";
 import type { WalletDossier } from "@/lib/wallet-dossier";
 
 function WalletsBoard() {
@@ -20,6 +23,7 @@ function WalletsBoard() {
   const { openAddWallet } = useAddWallet();
 
   const [dossier, setDossier] = useState<WalletDossier | null>(null);
+  const [clusters, setClusters] = useState<FlowCluster[]>([]);
   const [loadingDossier, setLoadingDossier] = useState(false);
   const [dossierError, setDossierError] = useState<string | null>(null);
   const [tab, setTab] = useState<"activity" | "holdings">("activity");
@@ -44,21 +48,28 @@ function WalletsBoard() {
     let cancelled = false;
     setLoadingDossier(true);
     setDossierError(null);
+    setClusters([]);
 
     void (async () => {
       try {
-        const res = await fetch(`/api/wallets/${encodeURIComponent(focused)}`, {
-          credentials: "include",
-        });
+        const [res, flowsRes] = await Promise.all([
+          fetch(`/api/wallets/${encodeURIComponent(focused)}`, { credentials: "include" }),
+          fetch("/api/flows", { credentials: "include" }),
+        ]);
         const data = (await res.json()) as { dossier?: WalletDossier; error?: string };
         if (cancelled) return;
         if (!res.ok || !data.dossier) {
           setDossier(null);
+          setClusters([]);
           setDossierError(data.error || "Could not load dossier");
           return;
         }
         setDossier(data.dossier);
         setTab("activity");
+        if (flowsRes.ok) {
+          const flows = (await flowsRes.json()) as { clusters?: FlowCluster[] };
+          setClusters(flows.clusters ?? []);
+        }
       } catch {
         if (!cancelled) {
           setDossier(null);
@@ -232,6 +243,8 @@ function WalletsBoard() {
                   </p>
                 ) : null}
               </div>
+
+              <WalletNarrativeCard narrative={buildWalletNarrative(dossier, clusters)} />
 
               <div className="rounded-[20px] border border-white/[0.08] bg-black/30">
                 <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">

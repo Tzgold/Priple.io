@@ -16,11 +16,14 @@ import {
 } from "lucide-react";
 import { TokenMark } from "@/components/app/TokenMark";
 import { FlowsPanel } from "@/components/app/FlowsPanel";
+import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { Button } from "@/components/ui/Button";
 import { useAddWallet } from "@/components/app/WalletModalProvider";
 import { cn } from "@/lib/cn";
 import { useDesk } from "@/lib/app-store";
 import type { PulseItem } from "@/lib/alchemy-pulse";
+import type { FlowCluster } from "@/lib/flows";
+import { buildWalletNarrative, dossierFromPulse } from "@/lib/wallet-narrative";
 
 const moveIcons = {
   buy: TrendingUp,
@@ -65,6 +68,7 @@ export function OverviewBoard() {
   } = useDesk();
   const { openAddWallet } = useAddWallet();
   const [pulse, setPulse] = useState<PulseResponse | null>(null);
+  const [clusters, setClusters] = useState<FlowCluster[]>([]);
   const [loadingPulse, setLoadingPulse] = useState(true);
 
   useEffect(() => {
@@ -74,10 +78,17 @@ export function OverviewBoard() {
     async function load() {
       setLoadingPulse(true);
       try {
-        const res = await fetch("/api/pulse", { credentials: "include" });
+        const [res, flowsRes] = await Promise.all([
+          fetch("/api/pulse", { credentials: "include" }),
+          fetch("/api/flows", { credentials: "include" }),
+        ]);
         if (!res.ok) return;
         const data = (await res.json()) as PulseResponse;
         if (!cancelled) setPulse(data);
+        if (flowsRes.ok) {
+          const flows = (await flowsRes.json()) as { clusters?: FlowCluster[] };
+          if (!cancelled) setClusters(flows.clusters ?? []);
+        }
         await refreshAlerts();
       } catch {
         // Keep previous / empty; board still shows watchlist + alerts.
@@ -105,6 +116,43 @@ export function OverviewBoard() {
   }, [savedAlerts, alerts]);
 
   const dates = [...new Set(items.map((item) => item.date))];
+
+  const overviewNarrative = useMemo(() => {
+    const focusWallet = (() => {
+      if (trackedWallets.length === 0) {
+        return items[0]
+          ? {
+              label: items[0].walletLabel,
+              address: items[0].walletAddress,
+              chain: "ETH",
+            }
+          : null;
+      }
+      let best = trackedWallets[0];
+      let bestCount = -1;
+      for (const wallet of trackedWallets) {
+        const addr = (wallet.fullAddress || wallet.address).toLowerCase();
+        const count = items.filter(
+          (item) =>
+            item.walletAddress.toLowerCase() === addr || item.walletLabel === wallet.label,
+        ).length;
+        if (count > bestCount) {
+          best = wallet;
+          bestCount = count;
+        }
+      }
+      return {
+        id: best.id,
+        label: best.label,
+        address: best.fullAddress || best.address,
+        chain: best.chain,
+      };
+    })();
+    if (!focusWallet) return null;
+    const dossier = dossierFromPulse(items, focusWallet);
+    if (!dossier) return null;
+    return buildWalletNarrative(dossier, clusters);
+  }, [trackedWallets, items, clusters]);
 
   return (
     <div className="space-y-5">
@@ -218,6 +266,8 @@ export function OverviewBoard() {
           ))
         )}
       </section>
+
+      {overviewNarrative ? <WalletNarrativeCard narrative={overviewNarrative} compact /> : null}
 
       <FlowsPanel
         title="When wallets move together"
