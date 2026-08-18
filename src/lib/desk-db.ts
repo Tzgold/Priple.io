@@ -285,3 +285,105 @@ export function relativeTime(date: Date) {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
+
+export const CHART_PREFS = ["dexscreener", "priple"] as const;
+export type ChartPref = (typeof CHART_PREFS)[number];
+
+export type UserSettingsRow = {
+  user_id: string;
+  email_alerts: boolean;
+  telegram_handle: string | null;
+  default_chart: ChartPref;
+  updated_at: Date;
+};
+
+let userSettingsReady = false;
+
+async function ensureUserSettingsTable() {
+  if (userSettingsReady) return;
+  await getPgPool().query(`
+    CREATE TABLE IF NOT EXISTS public.user_settings (
+      user_id text PRIMARY KEY,
+      email_alerts boolean NOT NULL DEFAULT true,
+      telegram_handle text NULL,
+      default_chart text NOT NULL DEFAULT 'dexscreener',
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  userSettingsReady = true;
+}
+
+function isChartPref(value: string): value is ChartPref {
+  return (CHART_PREFS as readonly string[]).includes(value);
+}
+
+export async function getUserSettings(userId: string): Promise<UserSettingsRow> {
+  await ensureUserSettingsTable();
+  const { rows } = await getPgPool().query<UserSettingsRow>(
+    `SELECT user_id, email_alerts, telegram_handle, default_chart, updated_at
+     FROM public.user_settings
+     WHERE user_id = $1`,
+    [userId],
+  );
+  const row = rows[0];
+  if (row) {
+    return {
+      ...row,
+      default_chart: isChartPref(row.default_chart) ? row.default_chart : "dexscreener",
+    };
+  }
+  return {
+    user_id: userId,
+    email_alerts: true,
+    telegram_handle: null,
+    default_chart: "dexscreener",
+    updated_at: new Date(),
+  };
+}
+
+export async function upsertUserSettings(
+  userId: string,
+  input: {
+    emailAlerts?: boolean;
+    telegramHandle?: string | null;
+    defaultChart?: ChartPref;
+  },
+): Promise<UserSettingsRow> {
+  await ensureUserSettingsTable();
+  const current = await getUserSettings(userId);
+  const emailAlerts = input.emailAlerts ?? current.email_alerts;
+  const telegramHandle =
+    input.telegramHandle === undefined ? current.telegram_handle : input.telegramHandle;
+  const defaultChart = input.defaultChart ?? current.default_chart;
+  const handle =
+    typeof telegramHandle === "string" ? telegramHandle.replace(/^@/, "").trim().slice(0, 64) || null : null;
+
+  const { rows } = await getPgPool().query<UserSettingsRow>(
+    `INSERT INTO public.user_settings (user_id, email_alerts, telegram_handle, default_chart, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (user_id) DO UPDATE SET
+       email_alerts = EXCLUDED.email_alerts,
+       telegram_handle = EXCLUDED.telegram_handle,
+       default_chart = EXCLUDED.default_chart,
+       updated_at = now()
+     RETURNING user_id, email_alerts, telegram_handle, default_chart, updated_at`,
+    [userId, emailAlerts, handle, defaultChart],
+  );
+  const row = rows[0] ?? current;
+  return {
+    ...row,
+    default_chart: isChartPref(row.default_chart) ? row.default_chart : "dexscreener",
+  };
+}
+
+export async function getUserEmail(userId: string): Promise<string | null> {
+  try {
+    const { rows } = await getPgPool().query<{ email: string }>(
+      `SELECT email FROM "user" WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    return rows[0]?.email || null;
+  } catch {
+    return null;
+  }
+}

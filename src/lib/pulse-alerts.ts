@@ -2,11 +2,14 @@ import { randomUUID } from "crypto";
 import type { PulseItem } from "@/lib/alchemy-pulse";
 import { getPgPool } from "@/lib/db";
 import {
+  getUserEmail,
+  getUserSettings,
   listAlertRules,
   listWallets,
   type AlertRuleRow,
   type DeskAlertType,
 } from "@/lib/desk-db";
+import { sendAlertEmail } from "@/lib/email";
 
 function parseUsd(value: string) {
   const cleaned = value.replace(/[$,\s]/g, "").toUpperCase();
@@ -85,6 +88,18 @@ function ruleMatches(
   return true;
 }
 
+async function notifyAlertEmail(userId: string, title: string, detail: string) {
+  try {
+    const settings = await getUserSettings(userId);
+    if (!settings.email_alerts) return;
+    const email = await getUserEmail(userId);
+    if (!email) return;
+    await sendAlertEmail({ to: email, title, detail });
+  } catch {
+    // Email is best-effort — inbox still stored.
+  }
+}
+
 /** Evaluate user rules against pulse items (wallet + side + min USD). */
 export async function evaluateAlertRulesFromPulse(userId: string, items: PulseItem[]) {
   const [rules, wallets] = await Promise.all([listAlertRules(userId), listWallets(userId)]);
@@ -121,7 +136,10 @@ export async function evaluateAlertRulesFromPulse(userId: string, items: PulseIt
           alertType: "signal",
           fingerprint,
         });
-        if (ok) created += 1;
+        if (ok) {
+          created += 1;
+          void notifyAlertEmail(userId, rule.title || `${item.walletLabel} ${item.action} ${item.asset}`, `${item.walletLabel} · ${item.amount} ${item.asset} (${item.usd})`);
+        }
       } catch {
         // Skip transient write issues.
       }
@@ -167,7 +185,10 @@ export async function syncAlertsFromPulse(userId: string, items: PulseItem[]) {
         alertType: alertTypeFor(item),
         fingerprint,
       });
-      if (ok) created += 1;
+      if (ok) {
+        created += 1;
+        void notifyAlertEmail(userId, title, detail);
+      }
     } catch {
       // Skip transient write issues; pulse still returns.
     }

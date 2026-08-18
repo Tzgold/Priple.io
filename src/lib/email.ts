@@ -118,3 +118,24 @@ export async function sendVerificationEmail({ to, url }: SendEmailInput) {
     url,
   });
 }
+
+export async function sendAlertEmail(input: { to: string; title: string; detail: string }) {
+  const appUrl = (process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "https://priple.vercel.app").replace(
+    /\/$/,
+    "",
+  );
+  const url = `${appUrl}/app/alerts`;
+  await sendResendEmail({
+    to: input.to,
+    subject: `Priple alert: ${input.title.slice(0, 80)}`,
+    html: renderBoxedEmail({
+      title: input.title.slice(0, 80),
+      body: `${input.detail.slice(0, 400)}\n\nThis is a research alert, not investment advice.`,
+      cta: "Open alerts",
+      url,
+    }),
+    text: `${input.title}\n${input.detail}\n${url}`,
+    devLabel: "Desk alert",
+    url,
+  });
+}
