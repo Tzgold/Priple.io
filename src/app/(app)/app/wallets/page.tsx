@@ -244,7 +244,10 @@ function WalletsBoard() {
                 ) : null}
               </div>
 
-              <WalletNarrativeCard narrative={buildWalletNarrative(dossier, clusters)} />
+              <WalletNarrativeCard
+                narrative={buildWalletNarrative(dossier, clusters)}
+                walletId={trackedWallets.some((wallet) => wallet.id === dossier.id) ? dossier.id : undefined}
+              />
 
               <div className="rounded-[20px] border border-white/[0.08] bg-black/30">
                 <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">

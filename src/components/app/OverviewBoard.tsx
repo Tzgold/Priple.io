@@ -122,6 +122,7 @@ export function OverviewBoard() {
       if (trackedWallets.length === 0) {
         return items[0]
           ? {
+              id: undefined as string | undefined,
               label: items[0].walletLabel,
               address: items[0].walletAddress,
               chain: "ETH",
@@ -154,7 +155,10 @@ export function OverviewBoard() {
     if (!focusWallet) return null;
     const dossier = dossierFromPulse(items, focusWallet);
     if (!dossier) return null;
-    return buildWalletNarrative(dossier, clusters);
+    return {
+      narrative: buildWalletNarrative(dossier, clusters),
+      walletId: focusWallet.id,
+    };
   }, [trackedWallets, items, clusters]);
 
   return (
@@ -278,7 +282,13 @@ export function OverviewBoard() {
         )}
       </section>
 
-      {overviewNarrative ? <WalletNarrativeCard narrative={overviewNarrative} compact /> : null}
+      {overviewNarrative ? (
+        <WalletNarrativeCard
+          narrative={overviewNarrative.narrative}
+          walletId={overviewNarrative.walletId}
+          compact
+        />
+      ) : null}
 
       <FlowsPanel
         title="When wallets move together"

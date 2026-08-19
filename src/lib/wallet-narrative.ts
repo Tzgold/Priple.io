@@ -42,7 +42,7 @@ function topAssets(dossier: WalletDossier, limit = 3) {
     .map(([asset, counts]) => ({ asset, ...counts }));
 }
 
-function clustersForWallet(clusters: FlowCluster[], address: string, label: string) {
+export function clustersForWallet(clusters: FlowCluster[], address: string, label: string) {
   const addr = address.toLowerCase();
   const usableAddress = addr.length >= 8 && !addr.includes("…");
   return clusters.filter((cluster) =>
