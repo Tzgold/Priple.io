@@ -11,6 +11,7 @@
   "dependencies": {
     "@marsidev/react-turnstile": "^1.6.0",
     "@web3icons/react": "^4.1.20",
+    "ai": "^7.0.66",
     "better-auth": "^1.6.28",
     "clsx": "^2.1.1",
     "lightweight-charts": "^5.2.1",
@@ -18,7 +19,8 @@
     "next": "16.3.0",
     "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
