@@ -1,10 +1,19 @@
 import { z } from "zod";
 import { generateText, Output, streamText } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { NarrativePacket } from "@/lib/narrative-packet";
 import { briefingDriftedFromPacket } from "@/lib/narrative-packet";
 import type { WalletNarrative } from "@/lib/wallet-narrative";
 
-export const NARRATIVE_MODEL = "google/gemini-3.5-flash-lite";
+const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "openai/gpt-4o-mini";
+const MODEL_FALLBACK = process.env.OPENAI_MODEL_FALLBACK ?? "google/gemini-2.0-flash-001";
+const TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT_MS ?? "20000", 10);
+
+function openrouter() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  return createOpenRouter({ apiKey });
+}
 
 const factSchema = z.object({
   label: z.string(),
@@ -65,27 +74,36 @@ function asBriefing(
   return briefing;
 }
 
+async function callBriefingModel(
+  modelId: string,
+  packet: NarrativePacket,
+): Promise<WalletNarrative | null> {
+  const or = openrouter();
+  const result = await generateText({
+    model: or(modelId),
+    output: Output.object({ schema: briefingSchema }),
+    system: NARRATIVE_SYSTEM,
+    prompt: `Write a wallet briefing from this packet:\n${packetPrompt(packet)}`,
+    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const parsed = briefingSchema.safeParse(result.output);
+  if (!parsed.success) return null;
+  return asBriefing(parsed.data, packet);
+}
+
 export async function writeWalletBriefing(
   packet: NarrativePacket,
 ): Promise<{ briefing: WalletNarrative; origin: "llm" | "template" }> {
-  try {
-    const result = await generateText({
-      model: NARRATIVE_MODEL,
-      output: Output.object({ schema: briefingSchema }),
-      system: NARRATIVE_SYSTEM,
-      prompt: `Write a wallet briefing from this packet:\n${packetPrompt(packet)}`,
-      abortSignal: AbortSignal.timeout(20_000),
-    });
-    const parsed = briefingSchema.safeParse(result.output);
-    if (!parsed.success) {
-      return { briefing: packet.template, origin: "template" };
+  // Try primary model, then fallback, then template
+  for (const modelId of [MODEL_PRIMARY, MODEL_FALLBACK]) {
+    try {
+      const briefing = await callBriefingModel(modelId, packet);
+      if (briefing) return { briefing, origin: "llm" };
+    } catch {
+      // try next model
     }
-    const briefing = asBriefing(parsed.data, packet);
-    if (!briefing) return { briefing: packet.template, origin: "template" };
-    return { briefing, origin: "llm" };
-  } catch {
-    return { briefing: packet.template, origin: "template" };
   }
+  return { briefing: packet.template, origin: "template" };
 }
 
 export function streamAskMore(input: {
@@ -94,6 +112,7 @@ export function streamAskMore(input: {
   history: Array<{ role: "user" | "assistant"; content: string }>;
   message: string;
 }) {
+  const or = openrouter();
   const messages = [
     ...input.history.map((row) => ({
       role: row.role,
@@ -103,13 +122,13 @@ export function streamAskMore(input: {
   ];
 
   return streamText({
-    model: NARRATIVE_MODEL,
+    model: or(MODEL_PRIMARY),
     system: `${ASK_MORE_SYSTEM}\n\nPacket:\n${packetPrompt(input.packet)}\n\nBriefing:\n${JSON.stringify({
       headline: input.briefing.headline,
       paragraphs: input.briefing.paragraphs,
       sources: input.briefing.sources,
     })}`,
     messages,
-    abortSignal: AbortSignal.timeout(30_000),
+    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
   });
 }
