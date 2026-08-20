@@ -103,6 +103,21 @@ export type CoinNarrativePacket = {
       tone: string;
     }>;
   };
+  momentum: {
+    bias: string;
+    summary: string;
+    volLiqLabel: string;
+    volLiqRatio: number | null;
+    rangeLabel: string;
+    windows: Array<{
+      id: string;
+      label: string;
+      changeLabel: string;
+      changePct: number | null;
+      signal: string;
+    }>;
+    notes: string[];
+  };
   tracked: {
     whyHere: string | null;
     walletBuys: number;
@@ -431,6 +446,21 @@ export function buildCoinPacketFromAnalysis(input: {
         detail: clip(band.detail, 240),
         tone: clip(band.tone, 16),
       })),
+    },
+    momentum: {
+      bias: analysis.momentum.bias,
+      summary: clip(analysis.momentum.summary, 320),
+      volLiqLabel: clip(analysis.momentum.volLiqLabel, 32),
+      volLiqRatio: analysis.momentum.volLiqRatio,
+      rangeLabel: clip(analysis.momentum.rangeLabel, 240),
+      windows: analysis.momentum.windows.slice(0, 4).map((window) => ({
+        id: clip(window.id, 16),
+        label: clip(window.label, 16),
+        changeLabel: clip(window.changeLabel, 24),
+        changePct: window.changePct,
+        signal: clip(window.signal, 16),
+      })),
+      notes: analysis.momentum.notes.map((note) => clip(note, 240)).slice(0, 4),
     },
     tracked: {
       whyHere: analysis.whyHere ? clip(analysis.whyHere, 400) : null,

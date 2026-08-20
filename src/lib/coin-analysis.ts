@@ -2,8 +2,10 @@ import { estimateMarketCap } from "@/lib/candle-math";
 import { fetchCoinIntel, type CoinIntel } from "@/lib/coin-intel";
 import { fetchDexScreenerEnrichment } from "@/lib/dexscreener";
 import {
+  fetchPoolOhlcv,
   fetchPoolTrades,
   fetchTokenDesk,
+  type Candle,
   type TokenDesk,
   type TokenTrade,
 } from "@/lib/geckoterminal";
@@ -79,6 +81,26 @@ export type CoinHolderMap = {
   bands: HolderBand[];
 };
 
+export type MomentumSignal = "up" | "down" | "flat" | "unknown";
+
+export type MomentumWindow = {
+  id: string;
+  label: string;
+  changeLabel: string;
+  changePct: number | null;
+  signal: MomentumSignal;
+};
+
+export type CoinMomentum = {
+  bias: "bullish" | "bearish" | "choppy" | "quiet" | "unknown";
+  summary: string;
+  volLiqLabel: string;
+  volLiqRatio: number | null;
+  rangeLabel: string;
+  windows: MomentumWindow[];
+  notes: string[];
+};
+
 export type CoinAnalysis = {
   symbol: string;
   name: string;
@@ -110,6 +132,8 @@ export type CoinAnalysis = {
   flow: CoinFlowTape;
   /** Holder concentration map with plain-language risk. */
   holderMap: CoinHolderMap;
+  /** Short-timeframe momentum + volume vs liquidity structure. */
+  momentum: CoinMomentum;
   social: {
     websites: string[];
     twitter: string | null;
@@ -634,6 +658,171 @@ export function buildHolderMap(
   };
 }
 
+function changeLabel(pct: number | null | undefined) {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(2)}%`;
+}
+
+function signalForChange(pct: number | null | undefined): MomentumSignal {
+  if (pct == null || !Number.isFinite(pct)) return "unknown";
+  if (pct >= 3) return "up";
+  if (pct <= -3) return "down";
+  return "flat";
+}
+
+function pctMove(from: number, to: number): number | null {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from === 0) return null;
+  return ((to - from) / from) * 100;
+}
+
+function candleChange(candles: Candle[], hoursBack: number): number | null {
+  if (candles.length < 2) return null;
+  const latest = candles[candles.length - 1];
+  if (!latest) return null;
+  const target = latest.time - hoursBack * 3600;
+  let anchor = candles[0];
+  for (const candle of candles) {
+    if (candle.time <= target) anchor = candle;
+    else break;
+  }
+  if (!anchor || anchor.time > latest.time) return null;
+  return pctMove(anchor.close, latest.close);
+}
+
+function candleRangeLabel(candles: Candle[]): string {
+  if (candles.length < 2) return "Range not available.";
+  const slice = candles.slice(-24);
+  let high = -Infinity;
+  let low = Infinity;
+  for (const candle of slice) {
+    high = Math.max(high, candle.high);
+    low = Math.min(low, candle.low);
+  }
+  if (!Number.isFinite(high) || !Number.isFinite(low) || low <= 0) {
+    return "Range not available.";
+  }
+  const width = ((high - low) / low) * 100;
+  return `24h candle range ~${width.toFixed(1)}% (high ${money(high)} / low ${money(low)}).`;
+}
+
+/** Build short-timeframe momentum + volume/liquidity structure from pool feeds. */
+export function buildMomentum(input: {
+  change1h: number | null;
+  change6h: number | null;
+  change24h: number | null;
+  volume24hUsd: number | null;
+  liquidityUsd: number | null;
+  candles?: Candle[];
+  cexMajor?: boolean;
+}): CoinMomentum {
+  if (input.cexMajor) {
+    return {
+      bias: "unknown",
+      summary: "CEX majors — use the chart lane for momentum; DEX vol/liq is not the right lens.",
+      volLiqLabel: "—",
+      volLiqRatio: null,
+      rangeLabel: "Use TradingView for structure on CEX majors.",
+      windows: [
+        { id: "1h", label: "1H", changeLabel: "—", changePct: null, signal: "unknown" },
+        { id: "6h", label: "6H", changeLabel: "—", changePct: null, signal: "unknown" },
+        { id: "24h", label: "24H", changeLabel: "—", changePct: null, signal: "unknown" },
+      ],
+      notes: ["Prefer the TradingView lane for CEX-style momentum."],
+    };
+  }
+
+  const candles = input.candles ?? [];
+  const change1h = input.change1h ?? candleChange(candles, 1);
+  const change6h = input.change6h ?? candleChange(candles, 6);
+  const change4h = candleChange(candles, 4);
+  const change24h = input.change24h ?? candleChange(candles, 24);
+
+  const windows: MomentumWindow[] = [
+    {
+      id: "1h",
+      label: "1H",
+      changeLabel: changeLabel(change1h),
+      changePct: change1h,
+      signal: signalForChange(change1h),
+    },
+    {
+      id: "4h",
+      label: "4H",
+      changeLabel: changeLabel(change4h ?? change6h),
+      changePct: change4h ?? change6h,
+      signal: signalForChange(change4h ?? change6h),
+    },
+    {
+      id: "24h",
+      label: "24H",
+      changeLabel: changeLabel(change24h),
+      changePct: change24h,
+      signal: signalForChange(change24h),
+    },
+  ];
+
+  const vol = input.volume24hUsd;
+  const liq = input.liquidityUsd;
+  const volLiqRatio =
+    vol != null && liq != null && liq > 0 && Number.isFinite(vol / liq) ? vol / liq : null;
+  const volLiqLabel =
+    volLiqRatio == null ? "—" : `${volLiqRatio.toFixed(1)}× vol / liq`;
+
+  const notes: string[] = [];
+  if (volLiqRatio != null) {
+    if (volLiqRatio > 8) {
+      notes.push("24h volume is very high vs liquidity — possible wash or thin-book churn.");
+    } else if (volLiqRatio > 3) {
+      notes.push("Active turnover vs the book — moves can travel fast.");
+    } else if (volLiqRatio < 0.4) {
+      notes.push("Quiet tape vs liquidity — momentum may fade without new flow.");
+    } else {
+      notes.push("Volume vs liquidity looks orderly for this pool window.");
+    }
+  } else {
+    notes.push("Volume / liquidity ratio not available in this window.");
+  }
+
+  const known = windows.filter((w) => w.changePct != null);
+  const up = known.filter((w) => (w.changePct ?? 0) >= 3).length;
+  const down = known.filter((w) => (w.changePct ?? 0) <= -3).length;
+  const mixed = known.length >= 2 && up > 0 && down > 0;
+
+  let bias: CoinMomentum["bias"] = "unknown";
+  if (known.length === 0) bias = "unknown";
+  else if (mixed) bias = "choppy";
+  else if (up >= 2 || (change24h != null && change24h >= 8 && up >= 1)) bias = "bullish";
+  else if (down >= 2 || (change24h != null && change24h <= -8 && down >= 1)) bias = "bearish";
+  else if (known.every((w) => Math.abs(w.changePct ?? 0) < 3)) bias = "quiet";
+  else if (up > down) bias = "bullish";
+  else if (down > up) bias = "bearish";
+  else bias = "choppy";
+
+  const summary =
+    known.length === 0
+      ? "Momentum windows not available in this pool’s feeds."
+      : bias === "bullish"
+        ? `Short-timeframe bias leans up — ${windows.map((w) => `${w.label} ${w.changeLabel}`).join(" · ")}.`
+        : bias === "bearish"
+          ? `Short-timeframe bias leans down — ${windows.map((w) => `${w.label} ${w.changeLabel}`).join(" · ")}.`
+          : bias === "choppy"
+            ? `Choppy structure across windows — ${windows.map((w) => `${w.label} ${w.changeLabel}`).join(" · ")}.`
+            : bias === "quiet"
+              ? `Quiet tape — moves stay inside a few percent across short windows.`
+              : "Momentum reads incomplete for this window.";
+
+  return {
+    bias,
+    summary,
+    volLiqLabel,
+    volLiqRatio,
+    rangeLabel: candleRangeLabel(candles),
+    windows,
+    notes: notes.slice(0, 4),
+  };
+}
+
 function buildRisk(desk: TokenDesk) {
   const notes: string[] = [];
   let score = 0;
@@ -783,6 +972,14 @@ export async function buildCoinAnalysis(input: {
         cexMajor: true,
       }),
       holderMap: buildHolderMap(null, { cexMajor: true }),
+      momentum: buildMomentum({
+        change1h: null,
+        change6h: null,
+        change24h: null,
+        volume24hUsd: null,
+        liquidityUsd: null,
+        cexMajor: true,
+      }),
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
       holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
@@ -827,6 +1024,8 @@ export async function buildCoinAnalysis(input: {
         fdvUsd: desk.fdvUsd ?? enrich?.fdvUsd ?? null,
         volume24hUsd: desk.volume24hUsd ?? enrich?.volume24hUsd ?? null,
         liquidityUsd: desk.liquidityUsd ?? enrich?.liquidityUsd ?? null,
+        priceChange1h: desk.priceChange1h ?? null,
+        priceChange6h: desk.priceChange6h ?? null,
         priceChange24h: desk.priceChange24h ?? enrich?.priceChange24h ?? null,
         poolAddress: desk.poolAddress ?? enrich?.pairAddress ?? null,
         info: info || desk.info,
@@ -847,6 +1046,8 @@ export async function buildCoinAnalysis(input: {
         coingeckoId: info?.coingeckoId ?? null,
         poolAddress: enrich?.pairAddress ?? null,
         poolName: null,
+        priceChange1h: null,
+        priceChange6h: null,
         priceChange24h: enrich?.priceChange24h ?? null,
         info,
         depth: {
@@ -874,14 +1075,25 @@ export async function buildCoinAnalysis(input: {
   const structure = buildStructure(merged, mcap.value);
 
   let poolTrades: TokenTrade[] = [];
+  let hourCandles: Candle[] = [];
   if (merged.poolAddress) {
-    try {
-      poolTrades = await fetchPoolTrades(merged.network, merged.poolAddress, 24);
-      if (poolTrades.length > 0 && !sources.includes("GeckoTerminal trades")) {
-        sources.push("GeckoTerminal trades");
-      }
-    } catch {
-      poolTrades = [];
+    const [tradesResult, candlesResult] = await Promise.all([
+      fetchPoolTrades(merged.network, merged.poolAddress, 24).catch(() => [] as TokenTrade[]),
+      fetchPoolOhlcv({
+        network: merged.network,
+        poolAddress: merged.poolAddress,
+        timeframe: "hour",
+        aggregate: 1,
+        limit: 48,
+      }).catch(() => [] as Candle[]),
+    ]);
+    poolTrades = tradesResult;
+    hourCandles = candlesResult;
+    if (poolTrades.length > 0 && !sources.includes("GeckoTerminal trades")) {
+      sources.push("GeckoTerminal trades");
+    }
+    if (hourCandles.length > 0 && !sources.includes("GeckoTerminal OHLCV")) {
+      sources.push("GeckoTerminal OHLCV");
     }
   }
   const flow = buildFlowTape({
@@ -890,6 +1102,14 @@ export async function buildCoinAnalysis(input: {
     trades: poolTrades,
   });
   const holderMap = buildHolderMap(merged.info?.holders);
+  const momentum = buildMomentum({
+    change1h: merged.priceChange1h,
+    change6h: merged.priceChange6h,
+    change24h: merged.priceChange24h,
+    volume24hUsd: merged.volume24hUsd,
+    liquidityUsd: merged.liquidityUsd,
+    candles: hourCandles,
+  });
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
       ? `${((merged.liquidityUsd / mcap.value) * 100).toFixed(1)}% liq / mcap`
@@ -979,6 +1199,7 @@ export async function buildCoinAnalysis(input: {
     security,
     flow,
     holderMap,
+    momentum,
     social: {
       websites: (info?.socials.websites ?? []).filter((url) => /^https?:\/\//i.test(url)),
       twitter: info?.socials.twitter ?? null,

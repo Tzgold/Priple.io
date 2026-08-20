@@ -36,6 +36,8 @@ export type TokenDesk = {
   coingeckoId: string | null;
   poolAddress: string | null;
   poolName: string | null;
+  priceChange1h: number | null;
+  priceChange6h: number | null;
   priceChange24h: number | null;
   info: OnchainTokenInfo | null;
   depth: TokenDepth;
@@ -148,6 +150,8 @@ export async function fetchTokenDesk(
     : firstPoolId;
 
   let poolName: string | null = null;
+  let priceChange1h: number | null = null;
+  let priceChange6h: number | null = null;
   let priceChange24h: number | null = null;
   let liquidityUsd = num(attrs.total_reserve_in_usd);
 
@@ -157,6 +161,8 @@ export async function fetchTokenDesk(
       const poolAttrs = ((poolJson.data as Json | undefined)?.attributes || {}) as Json;
       poolName = typeof poolAttrs.name === "string" ? poolAttrs.name : null;
       const changes = (poolAttrs.price_change_percentage || {}) as Json;
+      priceChange1h = num(changes.h1);
+      priceChange6h = num(changes.h6);
       priceChange24h = num(changes.h24);
       liquidityUsd = num(poolAttrs.reserve_in_usd) ?? liquidityUsd;
     } catch {
@@ -204,6 +210,8 @@ export async function fetchTokenDesk(
       (typeof attrs.coingecko_coin_id === "string" ? attrs.coingecko_coin_id : null),
     poolAddress,
     poolName,
+    priceChange1h,
+    priceChange6h,
     priceChange24h,
     info,
     depth: buildDepth({
