@@ -47,11 +47,9 @@ export default function SettingsPage() {
     defaultChart,
     setDefaultChart,
     wallets,
-    alerts,
     savedAlerts,
   } = useDesk();
 
-  const [telegramHandle, setTelegramHandle] = useState("");
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
@@ -63,25 +61,9 @@ export default function SettingsPage() {
     setOrigin(window.location.origin);
   }, []);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const res = await fetch("/api/settings", { credentials: "include" });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          settings?: { telegramHandle?: string | null };
-        };
-        if (data.settings?.telegramHandle) setTelegramHandle(data.settings.telegramHandle);
-      } catch {
-        // keep local
-      }
-    })();
-  }, []);
-
   async function save(partial: {
     emailAlerts?: boolean;
     defaultChart?: ChartPref;
-    telegramHandle?: string | null;
   }) {
     setSaving(true);
     setNote(null);
@@ -111,7 +93,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        description="Profile, alert channels, chart default, and the host this desk is signed into."
+        description="Profile, email alerts, chart default, and the host this desk is signed into."
       />
 
       <div className="space-y-3">
@@ -135,20 +117,20 @@ export default function SettingsPage() {
             <div>
               <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">Desk</dt>
               <dd className="mt-1 font-mono text-[13px] text-zinc-300">
-                {wallets.length} wallets · {savedAlerts.length || alerts.length} inbox alerts
+                {wallets.length} wallets · {savedAlerts.length} inbox alerts
               </dd>
             </div>
           </dl>
         </section>
 
         <section className="rounded-[18px] border border-white/[0.08] bg-black/30 p-5">
-          <h3 className="font-sans text-[15px] font-semibold text-white">Alert channels</h3>
+          <h3 className="font-sans text-[15px] font-semibold text-white">Alert delivery</h3>
           <p className="mt-1 font-mono text-[12px] text-zinc-500">
-            Rules still live on{" "}
+            Rules live on{" "}
             <Link href="/app/alerts" className="text-zinc-300 underline underline-offset-2">
               Alerts
             </Link>
-            . Channels decide where a hit is copied.
+            . Choose whether hits also copy to email.
           </p>
 
           <div className="mt-4 space-y-3">
@@ -172,34 +154,6 @@ export default function SettingsPage() {
                 disabled={saving}
                 onClick={() => void save({ emailAlerts: !emailAlerts })}
               />
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.06] px-4 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[13px] font-medium text-white">Telegram</p>
-                  <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
-                    Handle is saved. Bot delivery is not live yet.
-                  </p>
-                </div>
-              </div>
-              <form
-                className="mt-3 flex flex-wrap gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void save({ telegramHandle: telegramHandle.trim() || null });
-                }}
-              >
-                <input
-                  value={telegramHandle}
-                  onChange={(event) => setTelegramHandle(event.target.value)}
-                  placeholder="@handle"
-                  className="h-9 min-w-[180px] flex-1 rounded-full border border-white/10 bg-black/40 px-3 font-mono text-[12px] text-white outline-none placeholder:text-zinc-600"
-                />
-                <Button type="submit" size="sm" variant="secondary" disabled={saving}>
-                  Save handle
-                </Button>
-              </form>
             </div>
           </div>
           {note ? <p className="mt-3 font-mono text-[11px] text-zinc-500">{note}</p> : null}
