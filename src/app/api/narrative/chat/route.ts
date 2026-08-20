@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   } | null;
 
   const threadId = clip(body?.threadId, 80);
-  const message = clip(body?.message, 400);
+  const message = clip(body?.message, 600);
   if (!threadId || !message) {
     return NextResponse.json({ error: "threadId and message are required" }, { status: 400 });
   }
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   await appendNarrativeMessage({ threadId: thread.id, role: "user", content: message });
 
   try {
-    const result = streamAskMore({
+    const result = await streamAskMore({
       packet: thread.packet,
       briefing: thread.briefing,
       history: history.map((row) => ({ role: row.role, content: row.content })),

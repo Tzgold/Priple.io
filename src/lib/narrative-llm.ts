@@ -33,19 +33,103 @@ const briefingSchema = z.object({
   facts: z.array(factSchema).max(4),
 });
 
-export const NARRATIVE_SYSTEM = `You are Priple's desk analyst. Research only — never investment advice.
+export const NARRATIVE_SYSTEM_WALLET = `You are Priple's desk analyst. Research only — never investment advice.
 Use ONLY the JSON fact packet. Do not invent wallets, tickers, USD sizes, headlines, or overlap.
-If window.live is false, say this window is not a live personal feed (quiet / no Alchemy transfers).
-If activity is empty, say the desk was quiet. Do not pad with demo tape.
-No buy/sell/hold recommendations, no price targets, no hype ("loading", "this will run").
-Tone: terminal, specific, short.
+
+Wallet rules:
+- If window.live is false, say this window is not a live personal feed (quiet / no Alchemy transfers).
+- If activity is empty, say the desk was quiet. Do not pad with demo tape.
+- When explaining trades, use activity rows + tradeSummary. Be specific: side, asset, amount, usd, time.
+- tradeSummary.netFlowUsd is window flow (sell USD − buy USD), NOT realized profit. Always say that if the user asks about profit/PnL.
+- Holdings are a snapshot (symbol, network, balance), not cost basis. Do not invent entry prices or % gains.
+- No buy/sell/hold recommendations, no price targets, no hype.
+
+Tone for briefings: terminal, specific, clear.
 Sources are copied by the server — do not add sources.
 Facts row labels must stay: "Buys / sells", "Assets touched", "Networks", "Wallet overlap".`;
 
-export const ASK_MORE_SYSTEM = `${NARRATIVE_SYSTEM}
-Answer the user's question about THIS packet and briefing only.
-If the answer is not in the packet, say it is not in this window.
-Refuse trade calls.`;
+export const NARRATIVE_SYSTEM_COIN = `You are Priple's desk analyst. Research only — never investment advice.
+Use ONLY the JSON fact packet. Do not invent wallets, tickers, USD sizes, headlines, posts, or links.
+
+Coin rules:
+- Discuss market, holders, tracked wallet moves, risk, social, and news only from the packet.
+- Use holders.count, holders.top10, holders.next20 when discussing concentration.
+- If tracked.moves is empty, say no tracked desks moved this coin in this window.
+- For news questions: use intel.headlines. Quote title + source and paste the exact url from the packet. Never invent a URL.
+- For social questions: use social.* and intel social counts (followers, reddit, telegram, sentiment, heat).
+- If headlines/social fields are empty or missing, say they are not in this window — do not invent posts.
+- No buy/sell/hold recommendations, no price targets, no hype.
+
+Tone for briefings: terminal, specific, clear. Include real links when the packet has them.
+Sources are copied by the server — do not add sources.
+Facts row labels must stay: "24H change", "Liquidity", "Risk", "Tracked desks".`;
+
+function systemForPacket(packet: NarrativePacket) {
+  return packet.subject.type === "coin" ? NARRATIVE_SYSTEM_COIN : NARRATIVE_SYSTEM_WALLET;
+}
+
+export const ASK_MORE_SYSTEM = `You are answering a follow-up question about THIS packet and briefing only.
+
+Answer quality (required):
+- Fully answer what the user asked. Do not give one-line replies when the packet has detail.
+- Prefer 1 short lead sentence, then structured bullets or numbered items with the facts.
+- Pull every relevant field from the packet — amounts, USD, times, wallets, risk notes, headlines, links, social counts.
+- If they ask about news: list each relevant headline with title, source, and the exact https URL.
+- If they ask about trades / buys / sells / profit: list the relevant rows and use tradeSummary; clearly say netFlowUsd is window flow, not realized PnL.
+- If they ask about risk / liquidity / social: explain using structure, risk.notes, market, and intel fields.
+- If something is missing from the packet, say exactly what is not in this window — then still answer with what IS available.
+- Stay research-only. Refuse trade calls ("should I buy"). Never invent numbers, wallets, posts, or URLs.
+
+Length guide: usually 120–350 words when the packet has data. Short only when the packet truly has almost nothing.`;
+
+function briefingPromptFor(packet: NarrativePacket) {
+  if (packet.subject.type === "coin") {
+    return `Write a thorough coin desk briefing from this packet.
+
+Structure:
+- headline: one sharp line naming the symbol and the main story (tracked flow, risk, or market move).
+- paragraphs: 2–4 paragraphs. Cover market (price, mcap, 24h, liquidity, volume), holder concentration if present, tracked desk moves (who bought/sold, amounts, USD), risk notes, and any intel headlines or social heat — only from the packet.
+- highlight: optional callout when there is a standout (large tracked buy, headline, or risk flag); otherwise null.
+- facts: use exactly the template fact labels from the packet — do not rename them.
+
+Be specific with numbers and wallet labels from tracked.moves. If intel.headlines exist, mention at least one by title (no invented URLs in paragraphs — links are for Ask more).
+If tracked.moves is empty, say so clearly.
+
+Packet:
+${packetPrompt(packet)}`;
+  }
+
+  return `Write a thorough wallet desk briefing from this packet.
+
+Structure:
+- headline: one sharp line on what this desk did in the window (or that the feed is quiet / not live).
+- paragraphs: 2–4 paragraphs. Cover live vs quiet window, concrete buys/sells from activity, tradeSummary totals, notable holdings (symbol + balance), and overlap with other desks from flows.
+- highlight: optional callout for the largest trade or flow overlap; null if nothing stands out.
+- facts: use exactly the template fact labels from the packet — do not rename them.
+
+Cite specific trades (side, asset, amount, usd, time). If window.live is false, lead with that — do not describe demo tape as live activity.
+If profit is implied, clarify tradeSummary is window flow only, not realized PnL.
+
+Packet:
+${packetPrompt(packet)}`;
+}
+
+function askMorePromptFor(packet: NarrativePacket, message: string) {
+  if (packet.subject.type === "coin") {
+    return `User question: ${message}
+
+Write a thorough desk answer for this coin.
+Cover every part of the question using market, holders, tracked.moves, risk, structure, social, intel.headlines (with URLs), opportunity, and flows when relevant.
+Use bullets for lists. Paste exact https URLs from intel.headlines when citing news.`;
+  }
+
+  return `User question: ${message}
+
+Write a thorough desk answer for this wallet.
+Cover every part of the question using activity (include hash/network when listing trades), tradeSummary, holdings (symbol + balance), flows, and window.live.
+List concrete trades (side, asset, amount, usd, time) when relevant.
+If profit/PnL is asked, explain using tradeSummary and state it is not realized profit.`;
+}
 
 function packetPrompt(packet: NarrativePacket) {
   const { template: _template, ...rest } = packet;
@@ -82,8 +166,9 @@ async function callBriefingModel(
   const result = await generateText({
     model: or(modelId),
     output: Output.object({ schema: briefingSchema }),
-    system: NARRATIVE_SYSTEM,
-    prompt: `Write a wallet briefing from this packet:\n${packetPrompt(packet)}`,
+    system: systemForPacket(packet),
+    prompt: briefingPromptFor(packet),
+    maxOutputTokens: 1400,
     abortSignal: AbortSignal.timeout(TIMEOUT_MS),
   });
   const parsed = briefingSchema.safeParse(result.output);
@@ -94,7 +179,6 @@ async function callBriefingModel(
 export async function writeWalletBriefing(
   packet: NarrativePacket,
 ): Promise<{ briefing: WalletNarrative; origin: "llm" | "template" }> {
-  // Try primary model, then fallback, then template
   for (const modelId of [MODEL_PRIMARY, MODEL_FALLBACK]) {
     try {
       const briefing = await callBriefingModel(modelId, packet);
@@ -106,29 +190,53 @@ export async function writeWalletBriefing(
   return { briefing: packet.template, origin: "template" };
 }
 
-export function streamAskMore(input: {
+export async function streamAskMore(input: {
   packet: NarrativePacket;
   briefing: WalletNarrative;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   message: string;
 }) {
   const or = openrouter();
-  const messages = [
-    ...input.history.map((row) => ({
-      role: row.role,
-      content: row.content,
-    })),
-    { role: "user" as const, content: input.message },
-  ];
+  const prior = input.history.map((row) => ({
+    role: row.role,
+    content: row.content,
+  }));
 
-  return streamText({
-    model: or(MODEL_PRIMARY),
-    system: `${ASK_MORE_SYSTEM}\n\nPacket:\n${packetPrompt(input.packet)}\n\nBriefing:\n${JSON.stringify({
-      headline: input.briefing.headline,
-      paragraphs: input.briefing.paragraphs,
-      sources: input.briefing.sources,
-    })}`,
-    messages,
+  const shared = {
+    system: `${systemForPacket(input.packet)}
+
+${ASK_MORE_SYSTEM}
+
+Packet (source of truth):
+${packetPrompt(input.packet)}
+
+Briefing already shown to the user:
+${JSON.stringify({
+  headline: input.briefing.headline,
+  paragraphs: input.briefing.paragraphs,
+  sources: input.briefing.sources,
+})}`,
+    messages: [
+      ...prior,
+      {
+        role: "user" as const,
+        content: askMorePromptFor(input.packet, input.message),
+      },
+    ],
+    maxOutputTokens: 1600,
     abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  };
+
+  for (const modelId of [MODEL_PRIMARY, MODEL_FALLBACK]) {
+    try {
+      return streamText({
+        model: or(modelId),
+        ...shared,
+      });
+    } catch {
+      // try fallback model
+    }
+  }
+
+  throw new Error("Could not reach any model");
 }
