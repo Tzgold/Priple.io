@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
@@ -21,7 +22,12 @@ import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
 import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { cn } from "@/lib/cn";
 import { buildCoinNarrativeTemplate } from "@/lib/coin-narrative";
-import type { CoinAnalysis, HolderBandTone, SecurityCheckStatus } from "@/lib/coin-analysis";
+import type {
+  CoinAnalysis,
+  HolderBandTone,
+  MomentumSignal,
+  SecurityCheckStatus,
+} from "@/lib/coin-analysis";
 
 function safeHttpUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -359,6 +365,65 @@ export function CoinAnalysisPanel({
           <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                <Activity className="h-3 w-3" /> Momentum / structure
+              </p>
+              <span
+                className={cn(
+                  "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase",
+                  analysis.momentum.bias === "bullish"
+                    ? "border-teal-500/30 text-teal-300"
+                    : analysis.momentum.bias === "bearish"
+                      ? "border-rose-500/30 text-rose-300"
+                      : analysis.momentum.bias === "choppy"
+                        ? "border-amber-500/30 text-amber-200"
+                        : "border-white/10 text-zinc-500",
+                )}
+              >
+                Bias · {analysis.momentum.bias}
+              </span>
+            </div>
+            <p className="mt-2 font-mono text-[11px] leading-5 text-zinc-400">
+              {analysis.momentum.summary}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {analysis.momentum.windows.map((window) => (
+                <div
+                  key={window.id}
+                  className="rounded-xl border border-white/[0.04] bg-black/25 px-2.5 py-2 text-center"
+                >
+                  <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+                    {window.label}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 font-mono text-[13px]",
+                      momentumTone(window.signal),
+                    )}
+                  >
+                    {window.changeLabel}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <Mini label="Vol / Liq" value={analysis.momentum.volLiqLabel} />
+              <Mini
+                label="Structure"
+                value={analysis.momentum.rangeLabel.replace(/^24h candle range ~/, "~")}
+              />
+            </div>
+            <ul className="mt-3 space-y-1.5">
+              {analysis.momentum.notes.map((note) => (
+                <li key={note} className="font-mono text-[11px] leading-5 text-zinc-500">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
                 <Users className="h-3 w-3" /> Holder map
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -650,6 +715,13 @@ function bandToneBar(tone: HolderBandTone) {
   if (tone === "watch") return "bg-amber-300/80";
   if (tone === "ok") return "bg-teal-400/80";
   return "bg-zinc-600";
+}
+
+function momentumTone(signal: MomentumSignal) {
+  if (signal === "up") return "text-teal-300";
+  if (signal === "down") return "text-rose-300";
+  if (signal === "flat") return "text-zinc-300";
+  return "text-zinc-500";
 }
 
 function StructureCard({
