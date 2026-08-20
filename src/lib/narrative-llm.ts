@@ -40,6 +40,7 @@ Wallet rules:
 - If window.live is false, say this window is not a live personal feed (quiet / no Alchemy transfers).
 - If activity is empty, say the desk was quiet. Do not pad with demo tape.
 - When explaining trades, use activity rows + tradeSummary. Be specific: side, asset, amount, usd, time.
+- Use desk.bias / desk.biasLabel and desk.feedLabel when summarizing the window posture.
 - tradeSummary.netFlowUsd is window flow (sell USD − buy USD), NOT realized profit. Always say that if the user asks about profit/PnL.
 - Holdings are a snapshot (symbol, network, balance), not cost basis. Do not invent entry prices or % gains.
 - No buy/sell/hold recommendations, no price targets, no hype.
@@ -112,7 +113,7 @@ ${packetPrompt(packet)}`;
 
 Structure:
 - headline: one sharp line on what this desk did in the window (or that the feed is quiet / not live).
-- paragraphs: 2–4 paragraphs. Cover live vs quiet window, concrete buys/sells from activity, tradeSummary totals, notable holdings (symbol + balance), and overlap with other desks from flows.
+- paragraphs: 2–4 paragraphs. Cover live vs quiet window (desk.feedLabel / desk.biasLabel), concrete buys/sells from activity, tradeSummary totals, notable holdings (symbol + balance), and overlap with other desks from flows.
 - highlight: optional callout for the largest trade or flow overlap; null if nothing stands out.
 - facts: use exactly the template fact labels from the packet — do not rename them.
 
@@ -135,7 +136,7 @@ Use bullets for lists. Paste exact https URLs from intel.headlines when citing n
   return `User question: ${message}
 
 Write a thorough desk answer for this wallet.
-Cover every part of the question using activity (include hash/network when listing trades), tradeSummary, holdings (symbol + balance), flows, and window.live.
+Cover every part of the question using activity (include hash/network when listing trades), tradeSummary, desk (bias / feed), holdings (symbol + balance), flows, and window.live.
 List concrete trades (side, asset, amount, usd, time) when relevant.
 If profit/PnL is asked, explain using tradeSummary and state it is not realized profit.`;
 }

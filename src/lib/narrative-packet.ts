@@ -2,6 +2,7 @@ import type { FlowCluster } from "@/lib/flows";
 import type { CoinAnalysis } from "@/lib/coin-analysis";
 import type { PulseItem } from "@/lib/alchemy-pulse";
 import { buildCoinNarrativeTemplate } from "@/lib/coin-narrative";
+import { buildWalletDeskBrief, type WalletDeskBrief } from "@/lib/wallet-desk";
 import {
   buildWalletNarrative,
   clustersForWallet,
@@ -52,6 +53,19 @@ export type WalletNarrativePacket = {
     networks: number;
   };
   tradeSummary: WalletTradeSummary;
+  /** Grounded desk brief — same shape as WalletDeskPanel. */
+  desk: {
+    bias: WalletDeskBrief["bias"];
+    biasLabel: string;
+    feedLabel: string;
+    feedNote: string;
+    buysCount: number;
+    sellsCount: number;
+    assetsTouched: number;
+    networksTouched: number;
+    holdingsCount: number;
+    overlapCount: number;
+  };
   activity: NarrativePacketActivity[];
   holdings: Array<{ symbol: string; network: string; balance: string }>;
   flows: Array<{
@@ -345,6 +359,8 @@ export function buildWalletPacketFromDossier(input: {
     ),
   );
 
+  const desk = buildWalletDeskBrief(dossier, input.clusters);
+
   return {
     subject: {
       type: "wallet",
@@ -365,6 +381,18 @@ export function buildWalletPacketFromDossier(input: {
       networks: networks.length,
     },
     tradeSummary: buildWalletTradeSummary(activity),
+    desk: {
+      bias: desk.bias,
+      biasLabel: desk.biasLabel,
+      feedLabel: desk.feedLabel,
+      feedNote: clip(desk.feedNote, 240),
+      buysCount: desk.buysCount,
+      sellsCount: desk.sellsCount,
+      assetsTouched: desk.assetsTouched,
+      networksTouched: desk.networksTouched,
+      holdingsCount: desk.holdings.count,
+      overlapCount: desk.overlap.count,
+    },
     activity,
     holdings,
     flows: related.slice(0, 8).map((cluster) => ({
