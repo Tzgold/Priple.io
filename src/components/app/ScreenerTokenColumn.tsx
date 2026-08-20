@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TokenMark } from "@/components/app/TokenMark";
 import { cn } from "@/lib/cn";
 
@@ -123,6 +123,12 @@ export function ScreenerTokenColumn({
   searchSlot?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState<ScreenerFilterId>("trending");
+  // Counts often differ between SSR (empty board) and the hydrated client
+  // store — defer showing them until after mount to avoid hydration mismatch.
+  const [countsReady, setCountsReady] = useState(false);
+  useEffect(() => {
+    setCountsReady(true);
+  }, []);
 
   const lists: Record<ScreenerFilterId, ScreenerListCoin[]> = useMemo(
     () => ({
@@ -161,6 +167,7 @@ export function ScreenerTokenColumn({
         <div className="screener-filter-scroll flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {FILTERS.map((tab) => {
             const active = filter === tab.id;
+            const count = counts[tab.id];
             return (
               <button
                 key={tab.id}
@@ -174,8 +181,8 @@ export function ScreenerTokenColumn({
                 )}
               >
                 {tab.label}
-                {counts[tab.id] > 0 ? (
-                  <span className="ml-1.5 text-[10px] text-zinc-500">{counts[tab.id]}</span>
+                {countsReady && count > 0 ? (
+                  <span className="ml-1.5 text-[10px] text-zinc-500">{count}</span>
                 ) : null}
               </button>
             );
