@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Droplets, Globe, Newspaper, Radio, Shield, Users } from "lucide-react";
 import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
+import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { cn } from "@/lib/cn";
+import { buildCoinNarrativeTemplate } from "@/lib/coin-narrative";
 import type { CoinAnalysis } from "@/lib/coin-analysis";
 
 function safeHttpUrl(value: string | null | undefined) {
@@ -84,16 +86,20 @@ export function CoinAnalysisPanel({
   }, [network, address, whyHere, trackedWalletBuys]);
 
   const website = safeHttpUrl(analysis?.social.websites[0]);
+  const coinTemplate = analysis
+    ? buildCoinNarrativeTemplate(analysis, trackedWalletBuys ?? 0)
+    : null;
 
   return (
+    <div className="space-y-4">
     <section className="rounded-[20px] border border-white/[0.08] bg-black/30 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-            Research brief
+            Market structure
           </p>
           <h3 className="mt-1 font-sans text-[16px] font-semibold text-white">
-            {loading ? "Reading market + on-chain feeds…" : analysis?.headline || "Analysis"}
+            {loading ? "Reading market + on-chain feeds…" : `${analysis?.symbol ?? "Token"} desk`}
           </h3>
         </div>
         {analysis ? (
@@ -130,14 +136,6 @@ export function CoinAnalysisPanel({
                 {analysis.whyHere}
               </p>
             ) : null}
-            <ul className="space-y-2">
-              {analysis.summary.map((line) => (
-                <li key={line} className="flex gap-2 font-mono text-[12px] leading-5 text-zinc-300">
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-zinc-500" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
 
             <div className="grid gap-2 sm:grid-cols-3">
               <StructureCard
@@ -301,6 +299,21 @@ export function CoinAnalysisPanel({
         <p className="mt-6 font-mono text-[12px] text-zinc-600">Building brief…</p>
       ) : null}
     </section>
+
+      {coinTemplate ? (
+        <WalletNarrativeCard
+          narrative={coinTemplate}
+          variant="coin-desk"
+          subject={{
+            type: "coin",
+            network,
+            address,
+            whyHere,
+            trackedWalletBuys,
+          }}
+        />
+      ) : null}
+    </div>
   );
 }
 
