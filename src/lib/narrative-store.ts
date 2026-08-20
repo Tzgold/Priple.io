@@ -186,7 +186,7 @@ export async function appendNarrativeMessage(input: {
   await getPgPool().query(
     `INSERT INTO public.narrative_messages (id, thread_id, role, content, created_at)
      VALUES ($1, $2, $3, $4, now())`,
-    [id, input.threadId, input.role, input.content.slice(0, 4000)],
+    [id, input.threadId, input.role, input.content.slice(0, 8000)],
   );
   return id;
 }

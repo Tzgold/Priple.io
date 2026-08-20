@@ -42,6 +42,8 @@ assert.equal(emptyPacket.window.note, "empty");
 assert.equal(emptyPacket.activity.length, 0);
 assert.equal(emptyPacket.holdings.length, 0);
 assert.equal(emptyPacket.counts.buys, 0);
+assert.equal(emptyPacket.tradeSummary.buysUsd, "—");
+assert.equal(emptyPacket.tradeSummary.sellsUsd, "—");
 
 const live: WalletDossier = {
   ...quiet,
@@ -76,6 +78,9 @@ const livePacket = buildWalletPacketFromDossier({
 
 assert.equal(livePacket.window.note, "alchemy");
 assert.equal(livePacket.activity[0]?.asset, "LINK");
+assert.equal(livePacket.tradeSummary.buysUsd, "$18,000");
+assert.equal(livePacket.tradeSummary.topBuys[0]?.asset, "LINK");
+assert.match(livePacket.tradeSummary.note, /Not realized profit/);
 assert.equal(
   briefingDriftedFromPacket(
     { headline: "Desk Alpha bought LINK", paragraphs: ["Two buys in LINK."], highlight: null },
