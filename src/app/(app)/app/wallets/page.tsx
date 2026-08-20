@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/app/DashboardShell";
 import { TokenMark } from "@/components/app/TokenMark";
 import { CopyButton } from "@/components/app/CopyButton";
+import { WalletDeskPanel } from "@/components/app/WalletDeskPanel";
 import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { useAddWallet } from "@/components/app/WalletModalProvider";
 import { useDesk } from "@/lib/app-store";
 import { cn } from "@/lib/cn";
 import type { FlowCluster } from "@/lib/flows";
+import { buildWalletDeskBrief } from "@/lib/wallet-desk";
 import { buildWalletNarrative } from "@/lib/wallet-narrative";
 import type { WalletDossier } from "@/lib/wallet-dossier";
 
@@ -110,6 +112,11 @@ function WalletsBoard() {
 
   const walletNarrative = useMemo(
     () => (dossier ? buildWalletNarrative(dossier, clusters) : null),
+    [dossier, clusters],
+  );
+
+  const walletDesk = useMemo(
+    () => (dossier ? buildWalletDeskBrief(dossier, clusters) : null),
     [dossier, clusters],
   );
 
@@ -248,6 +255,8 @@ function WalletsBoard() {
                   </p>
                 ) : null}
               </div>
+
+              {walletDesk ? <WalletDeskPanel desk={walletDesk} /> : null}
 
               {walletNarrative ? (
                 <WalletNarrativeCard
