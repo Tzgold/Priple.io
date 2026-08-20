@@ -3,7 +3,26 @@ import { fetchCoinIntel, type CoinIntel } from "@/lib/coin-intel";
 import { fetchDexScreenerEnrichment } from "@/lib/dexscreener";
 import { fetchTokenDesk, type TokenDesk } from "@/lib/geckoterminal";
 import { computeOpportunityScore, type OpportunityResult } from "@/lib/opportunity-score";
-import { fetchOnchainTokenInfo } from "@/lib/token-info";
+import {
+  fetchOnchainTokenInfo,
+  type TokenSecurity,
+} from "@/lib/token-info";
+
+export type SecurityCheckStatus = "pass" | "warn" | "fail" | "unknown";
+
+export type SecurityCheck = {
+  id: string;
+  label: string;
+  status: SecurityCheckStatus;
+  detail: string;
+};
+
+export type CoinSecurityDesk = {
+  level: "low" | "medium" | "high" | "unknown";
+  summary: string;
+  gtScoreLabel: string;
+  checks: SecurityCheck[];
+};
 
 export type CoinAnalysis = {
   symbol: string;
@@ -30,6 +49,8 @@ export type CoinAnalysis = {
     level: "low" | "medium" | "high" | "unknown";
     notes: string[];
   };
+  /** Structured security checklist from on-chain / GT feeds. */
+  security: CoinSecurityDesk;
   social: {
     websites: string[];
     twitter: string | null;
@@ -48,6 +69,227 @@ export type CoinAnalysis = {
   sources: string[];
   generatedAt: string;
 };
+
+function authorityActive(value: string | null | undefined) {
+  if (value == null) return null;
+  const raw = value.trim().toLowerCase();
+  if (!raw || raw === "false" || raw === "null" || raw === "none" || raw === "0") {
+    return false;
+  }
+  return true;
+}
+
+function honeypotFlag(value: boolean | string | null | undefined): boolean | null {
+  if (value == null) return null;
+  if (typeof value === "boolean") return value;
+  const raw = value.trim().toLowerCase();
+  if (raw === "true" || raw === "1" || raw === "yes") return true;
+  if (raw === "false" || raw === "0" || raw === "no") return false;
+  return null;
+}
+
+/** Build a grounded security checklist from CoinGecko onchain / GT fields. */
+export function buildSecurityDesk(
+  sec: TokenSecurity | null | undefined,
+  opts?: { cexMajor?: boolean },
+): CoinSecurityDesk {
+  if (opts?.cexMajor) {
+    return {
+      level: "unknown",
+      summary: "CEX majors — honeypot / mint / freeze checks are not the right lens.",
+      gtScoreLabel: "—",
+      checks: [
+        {
+          id: "venue",
+          label: "Venue risk",
+          status: "unknown",
+          detail: "Risk is market/volatility and venue, not contract honeypot style.",
+        },
+      ],
+    };
+  }
+
+  if (!sec) {
+    return {
+      level: "unknown",
+      summary: "Security flags not available in this window’s feeds.",
+      gtScoreLabel: "—",
+      checks: [
+        {
+          id: "availability",
+          label: "Feed coverage",
+          status: "unknown",
+          detail: "No on-chain security attributes returned for this token.",
+        },
+      ],
+    };
+  }
+
+  const checks: SecurityCheck[] = [];
+  let fail = 0;
+  let warn = 0;
+
+  const honey = honeypotFlag(sec.isHoneypot);
+  if (honey === true) {
+    fail += 1;
+    checks.push({
+      id: "honeypot",
+      label: "Honeypot",
+      status: "fail",
+      detail: "Flagged as possible honeypot — treat as high risk.",
+    });
+  } else if (honey === false) {
+    checks.push({
+      id: "honeypot",
+      label: "Honeypot",
+      status: "pass",
+      detail: "Not flagged as honeypot in available feeds.",
+    });
+  } else {
+    checks.push({
+      id: "honeypot",
+      label: "Honeypot",
+      status: "unknown",
+      detail: "Honeypot status not reported.",
+    });
+  }
+
+  const mint = authorityActive(sec.mintAuthority);
+  if (mint === true) {
+    fail += 1;
+    checks.push({
+      id: "mint",
+      label: "Mint authority",
+      status: "fail",
+      detail: "Mint authority may still be active — supply can expand.",
+    });
+  } else if (mint === false) {
+    checks.push({
+      id: "mint",
+      label: "Mint authority",
+      status: "pass",
+      detail: "Mint authority reported revoked / inactive.",
+    });
+  } else {
+    checks.push({
+      id: "mint",
+      label: "Mint authority",
+      status: "unknown",
+      detail: "Mint authority not reported for this chain/token.",
+    });
+  }
+
+  const freeze = authorityActive(sec.freezeAuthority);
+  if (freeze === true) {
+    fail += 1;
+    checks.push({
+      id: "freeze",
+      label: "Freeze authority",
+      status: "fail",
+      detail: "Freeze authority may still be active — transfers can be blocked.",
+    });
+  } else if (freeze === false) {
+    checks.push({
+      id: "freeze",
+      label: "Freeze authority",
+      status: "pass",
+      detail: "Freeze authority reported revoked / inactive.",
+    });
+  } else {
+    checks.push({
+      id: "freeze",
+      label: "Freeze authority",
+      status: "unknown",
+      detail: "Freeze authority not reported for this chain/token.",
+    });
+  }
+
+  if (sec.verified === true) {
+    checks.push({
+      id: "verified",
+      label: "Verified",
+      status: "pass",
+      detail: "Marked verified in available feeds.",
+    });
+  } else if (sec.verified === false) {
+    warn += 1;
+    checks.push({
+      id: "verified",
+      label: "Verified",
+      status: "warn",
+      detail: "Not marked verified in available feeds.",
+    });
+  } else {
+    checks.push({
+      id: "verified",
+      label: "Verified",
+      status: "unknown",
+      detail: "Verification status not reported.",
+    });
+  }
+
+  if (sec.gtScore != null) {
+    const score = sec.gtScore;
+    const status: SecurityCheckStatus =
+      score < 40 ? "fail" : score < 60 ? "warn" : "pass";
+    if (status === "fail") fail += 1;
+    else if (status === "warn") warn += 1;
+    checks.push({
+      id: "gtScore",
+      label: "GT score",
+      status,
+      detail: `GeckoTerminal score ${score.toFixed(0)}/100.`,
+    });
+  } else {
+    checks.push({
+      id: "gtScore",
+      label: "GT score",
+      status: "unknown",
+      detail: "GeckoTerminal score not available.",
+    });
+  }
+
+  if (sec.developerHoldingPct != null) {
+    const pct = sec.developerHoldingPct;
+    const status: SecurityCheckStatus =
+      pct > 20 ? "fail" : pct > 10 ? "warn" : "pass";
+    if (status === "fail") fail += 1;
+    else if (status === "warn") warn += 1;
+    checks.push({
+      id: "devHolding",
+      label: "Developer holding",
+      status,
+      detail: `Developer holding ~${pct.toFixed(1)}%.`,
+    });
+  } else {
+    checks.push({
+      id: "devHolding",
+      label: "Developer holding",
+      status: "unknown",
+      detail: "Developer holding % not reported.",
+    });
+  }
+
+  const level: CoinSecurityDesk["level"] =
+    fail >= 1 ? "high" : warn >= 2 ? "medium" : warn === 1 ? "medium" : fail === 0 && warn === 0 ? "low" : "unknown";
+
+  const known = checks.filter((c) => c.status !== "unknown").length;
+  const summary =
+    known === 0
+      ? "Security flags not available in this window’s feeds."
+      : fail > 0
+        ? `${fail} hard flag${fail === 1 ? "" : "s"} in available security feeds.`
+        : warn > 0
+          ? `${warn} soft warning${warn === 1 ? "" : "s"} — no hard honeypot/mint/freeze fail in feeds.`
+          : "No hard security red flags in available feeds.";
+
+  return {
+    level,
+    summary,
+    gtScoreLabel: sec.gtScore != null ? `${sec.gtScore.toFixed(0)}/100` : "—",
+    checks,
+  };
+}
 
 function money(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return "—";
@@ -199,6 +441,7 @@ export async function buildCoinAnalysis(input: {
         holderNote: "On-chain holder concentration is less relevant for CEX majors.",
       },
       risk: { level: "unknown", notes: ["CEX majors — risk is market/volatility, not honeypot style."] },
+      security: buildSecurityDesk(null, { cexMajor: true }),
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
       holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
@@ -285,6 +528,7 @@ export async function buildCoinAnalysis(input: {
 
   const change = merged.priceChange24h;
   const risk = buildRisk(merged);
+  const security = buildSecurityDesk(merged.info?.security);
   const structure = buildStructure(merged, mcap.value);
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
@@ -372,6 +616,7 @@ export async function buildCoinAnalysis(input: {
     },
     structure,
     risk,
+    security,
     social: {
       websites: (info?.socials.websites ?? []).filter((url) => /^https?:\/\//i.test(url)),
       twitter: info?.socials.twitter ?? null,

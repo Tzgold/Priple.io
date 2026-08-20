@@ -52,8 +52,9 @@ export const NARRATIVE_SYSTEM_COIN = `You are Priple's desk analyst. Research on
 Use ONLY the JSON fact packet. Do not invent wallets, tickers, USD sizes, headlines, posts, or links.
 
 Coin rules:
-- Discuss market, holders, tracked wallet moves, risk, social, and news only from the packet.
+- Discuss market, holders, tracked wallet moves, risk, security checklist, social, and news only from the packet.
 - Use holders.count, holders.top10, holders.next20 when discussing concentration.
+- For security / honeypot / mint / freeze / GT score questions: use security.checks and security.summary. Quote each check label + status + detail. Do not invent flags.
 - If tracked.moves is empty, say no tracked desks moved this coin in this window.
 - For news questions: use intel.headlines. Quote title + source and paste the exact url from the packet. Never invent a URL.
 - For social questions: use social.* and intel social counts (followers, reddit, telegram, sentiment, heat).
@@ -77,6 +78,7 @@ Answer quality (required):
 - If they ask about news: list each relevant headline with title, source, and the exact https URL.
 - If they ask about trades / buys / sells / profit: list the relevant rows and use tradeSummary; clearly say netFlowUsd is window flow, not realized PnL.
 - If they ask about risk / liquidity / social: explain using structure, risk.notes, market, and intel fields.
+- If they ask about security / honeypot / mint / freeze / GT score: walk security.checks (label, status, detail) and security.summary.
 - If something is missing from the packet, say exactly what is not in this window — then still answer with what IS available.
 - Stay research-only. Refuse trade calls ("should I buy"). Never invent numbers, wallets, posts, or URLs.
 
@@ -88,7 +90,7 @@ function briefingPromptFor(packet: NarrativePacket) {
 
 Structure:
 - headline: one sharp line naming the symbol and the main story (tracked flow, risk, or market move).
-- paragraphs: 2–4 paragraphs. Cover market (price, mcap, 24h, liquidity, volume), holder concentration if present, tracked desk moves (who bought/sold, amounts, USD), risk notes, and any intel headlines or social heat — only from the packet.
+- paragraphs: 2–4 paragraphs. Cover market (price, mcap, 24h, liquidity, volume), holder concentration if present, security.summary / hard flags when present, tracked desk moves (who bought/sold, amounts, USD), risk notes, and any intel headlines or social heat — only from the packet.
 - highlight: optional callout when there is a standout (large tracked buy, headline, or risk flag); otherwise null.
 - facts: use exactly the template fact labels from the packet — do not rename them.
 
@@ -119,7 +121,7 @@ function askMorePromptFor(packet: NarrativePacket, message: string) {
     return `User question: ${message}
 
 Write a thorough desk answer for this coin.
-Cover every part of the question using market, holders, tracked.moves, risk, structure, social, intel.headlines (with URLs), opportunity, and flows when relevant.
+Cover every part of the question using market, holders, tracked.moves, risk, security.checks, structure, social, intel.headlines (with URLs), opportunity, and flows when relevant.
 Use bullets for lists. Paste exact https URLs from intel.headlines when citing news.`;
   }
 

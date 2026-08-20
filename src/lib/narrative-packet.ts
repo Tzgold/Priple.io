@@ -110,6 +110,17 @@ export type CoinNarrativePacket = {
     level: string;
     notes: string[];
   };
+  security: {
+    level: string;
+    summary: string;
+    gtScore: string;
+    checks: Array<{
+      id: string;
+      label: string;
+      status: string;
+      detail: string;
+    }>;
+  };
   social: {
     websites: string[];
     twitter: string | null;
@@ -391,6 +402,17 @@ export function buildCoinPacketFromAnalysis(input: {
     risk: {
       level: analysis.risk.level,
       notes: analysis.risk.notes.map((note) => clip(note, 400)).slice(0, 8),
+    },
+    security: {
+      level: analysis.security.level,
+      summary: clip(analysis.security.summary, 240),
+      gtScore: clip(analysis.security.gtScoreLabel, 24),
+      checks: analysis.security.checks.slice(0, 8).map((check) => ({
+        id: clip(check.id, 32),
+        label: clip(check.label, 48),
+        status: clip(check.status, 16),
+        detail: clip(check.detail, 240),
+      })),
     },
     social: {
       websites: analysis.social.websites.map((url) => clip(url, 240)).slice(0, 4),
