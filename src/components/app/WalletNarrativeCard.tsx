@@ -22,6 +22,7 @@ const WALLET_SUGGESTIONS = [
   "Is this feed live?",
   "Summarize buys vs sells",
   "Any overlap with other desks?",
+  "What's in holdings?",
 ];
 
 const COIN_SUGGESTIONS = [
