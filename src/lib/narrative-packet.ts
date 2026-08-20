@@ -89,6 +89,20 @@ export type CoinNarrativePacket = {
     top10: string;
     next20: string;
   };
+  holderMap: {
+    level: string;
+    summary: string;
+    countLabel: string;
+    lastUpdated: string | null;
+    bands: Array<{
+      id: string;
+      label: string;
+      pctLabel: string;
+      pct: number | null;
+      detail: string;
+      tone: string;
+    }>;
+  };
   tracked: {
     whyHere: string | null;
     walletBuys: number;
@@ -401,6 +415,22 @@ export function buildCoinPacketFromAnalysis(input: {
       count: clip(analysis.holders.countLabel, 24),
       top10: clip(analysis.holders.top10Label, 24),
       next20: clip(analysis.holders.next20Label, 24),
+    },
+    holderMap: {
+      level: analysis.holderMap.level,
+      summary: clip(analysis.holderMap.summary, 320),
+      countLabel: clip(analysis.holderMap.countLabel, 32),
+      lastUpdated: analysis.holderMap.lastUpdated
+        ? clip(analysis.holderMap.lastUpdated, 40)
+        : null,
+      bands: analysis.holderMap.bands.slice(0, 6).map((band) => ({
+        id: clip(band.id, 24),
+        label: clip(band.label, 48),
+        pctLabel: clip(band.pctLabel, 16),
+        pct: band.pct,
+        detail: clip(band.detail, 240),
+        tone: clip(band.tone, 16),
+      })),
     },
     tracked: {
       whyHere: analysis.whyHere ? clip(analysis.whyHere, 400) : null,

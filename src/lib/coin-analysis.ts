@@ -10,6 +10,7 @@ import {
 import { computeOpportunityScore, type OpportunityResult } from "@/lib/opportunity-score";
 import {
   fetchOnchainTokenInfo,
+  type TokenHoldersInfo,
   type TokenSecurity,
 } from "@/lib/token-info";
 import type { PulseItem } from "@/lib/alchemy-pulse";
@@ -59,6 +60,25 @@ export type CoinFlowTape = {
   tracked: CoinTrackedMove[];
 };
 
+export type HolderBandTone = "ok" | "watch" | "risk" | "unknown";
+
+export type HolderBand = {
+  id: string;
+  label: string;
+  pctLabel: string;
+  pct: number | null;
+  detail: string;
+  tone: HolderBandTone;
+};
+
+export type CoinHolderMap = {
+  level: "low" | "medium" | "high" | "unknown";
+  summary: string;
+  countLabel: string;
+  lastUpdated: string | null;
+  bands: HolderBand[];
+};
+
 export type CoinAnalysis = {
   symbol: string;
   name: string;
@@ -88,6 +108,8 @@ export type CoinAnalysis = {
   security: CoinSecurityDesk;
   /** Recent pool tape + tracked wallet moves on this coin. */
   flow: CoinFlowTape;
+  /** Holder concentration map with plain-language risk. */
+  holderMap: CoinHolderMap;
   social: {
     websites: string[];
     twitter: string | null;
@@ -467,6 +489,151 @@ export function withTrackedFlowMoves(
   };
 }
 
+function pctLabel(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1)}%`;
+}
+
+function bandToneForTop10(pct: number | null): HolderBandTone {
+  if (pct == null) return "unknown";
+  if (pct > 55) return "risk";
+  if (pct > 40) return "watch";
+  return "ok";
+}
+
+/** Build a grounded holder concentration map from on-chain distribution fields. */
+export function buildHolderMap(
+  holders: TokenHoldersInfo | null | undefined,
+  opts?: { cexMajor?: boolean },
+): CoinHolderMap {
+  if (opts?.cexMajor) {
+    return {
+      level: "unknown",
+      summary: "CEX majors — on-chain holder concentration is less meaningful than venue liquidity.",
+      countLabel: "—",
+      lastUpdated: null,
+      bands: [
+        {
+          id: "venue",
+          label: "Distribution lens",
+          pctLabel: "—",
+          pct: null,
+          detail: "Use exchange order books for concentration risk on CEX majors.",
+          tone: "unknown",
+        },
+      ],
+    };
+  }
+
+  if (!holders) {
+    return {
+      level: "unknown",
+      summary: "Holder concentration not available in this window’s feeds.",
+      countLabel: "—",
+      lastUpdated: null,
+      bands: [
+        {
+          id: "availability",
+          label: "Feed coverage",
+          pctLabel: "—",
+          pct: null,
+          detail: "No holder distribution attributes returned for this token.",
+          tone: "unknown",
+        },
+      ],
+    };
+  }
+
+  const top10 = holders.top10Pct;
+  const next20 = holders.next20Pct;
+  const next20b = holders.next20bPct;
+  const rest = holders.restPct;
+
+  const bands: HolderBand[] = [
+    {
+      id: "top10",
+      label: "Top 10",
+      pctLabel: pctLabel(top10),
+      pct: top10,
+      detail:
+        top10 == null
+          ? "Top 10 share not reported."
+          : top10 > 55
+            ? "Extreme concentration — a few wallets can move price hard."
+            : top10 > 40
+              ? "Elevated concentration — watch for coordinated dumps."
+              : "Healthier top-10 share than most memes.",
+      tone: bandToneForTop10(top10),
+    },
+    {
+      id: "next20",
+      label: "Next 20 (11–30)",
+      pctLabel: pctLabel(next20),
+      pct: next20,
+      detail:
+        next20 == null
+          ? "Next-20 band not reported."
+          : `Wallets 11–30 hold ~${next20.toFixed(1)}% — mid-tier desk concentration.`,
+      tone: next20 == null ? "unknown" : next20 > 25 ? "watch" : "ok",
+    },
+    {
+      id: "next20b",
+      label: "Next 20 (31–50)",
+      pctLabel: pctLabel(next20b),
+      pct: next20b,
+      detail:
+        next20b == null
+          ? "31–50 band not reported."
+          : `Wallets 31–50 hold ~${next20b.toFixed(1)}%.`,
+      tone: next20b == null ? "unknown" : "ok",
+    },
+    {
+      id: "rest",
+      label: "Rest of holders",
+      pctLabel: pctLabel(rest),
+      pct: rest,
+      detail:
+        rest == null
+          ? "Long-tail share not reported."
+          : rest < 20
+            ? "Thin long tail — supply is clustered at the top."
+            : `Broader float holds ~${rest.toFixed(1)}%.`,
+      tone: rest == null ? "unknown" : rest < 20 ? "watch" : "ok",
+    },
+  ];
+
+  const level: CoinHolderMap["level"] =
+    top10 == null
+      ? "unknown"
+      : top10 > 55
+        ? "high"
+        : top10 > 40
+          ? "medium"
+          : "low";
+
+  const countLabel =
+    holders.count != null ? holders.count.toLocaleString("en-US") : "—";
+
+  const summary =
+    top10 == null && holders.count == null
+      ? "Holder concentration not available in this window’s feeds."
+      : top10 == null
+        ? `About ${countLabel} holders reported — distribution bands incomplete.`
+        : top10 > 55
+          ? `High concentration risk — top 10 control ~${top10.toFixed(1)}%${holders.count != null ? ` across ~${countLabel} holders` : ""}.`
+          : top10 > 40
+            ? `Moderate concentration — top 10 control ~${top10.toFixed(1)}%${holders.count != null ? ` across ~${countLabel} holders` : ""}.`
+            : `Relatively distributed — top 10 hold ~${top10.toFixed(1)}%${holders.count != null ? ` across ~${countLabel} holders` : ""}.`;
+
+  return {
+    level,
+    summary,
+    countLabel,
+    lastUpdated: holders.lastUpdated,
+    bands,
+  };
+}
+
 function buildRisk(desk: TokenDesk) {
   const notes: string[] = [];
   let score = 0;
@@ -615,6 +782,7 @@ export async function buildCoinAnalysis(input: {
         trades: [],
         cexMajor: true,
       }),
+      holderMap: buildHolderMap(null, { cexMajor: true }),
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
       holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
@@ -721,6 +889,7 @@ export async function buildCoinAnalysis(input: {
     poolAddress: merged.poolAddress,
     trades: poolTrades,
   });
+  const holderMap = buildHolderMap(merged.info?.holders);
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
       ? `${((merged.liquidityUsd / mcap.value) * 100).toFixed(1)}% liq / mcap`
@@ -809,6 +978,7 @@ export async function buildCoinAnalysis(input: {
     risk,
     security,
     flow,
+    holderMap,
     social: {
       websites: (info?.socials.websites ?? []).filter((url) => /^https?:\/\//i.test(url)),
       twitter: info?.socials.twitter ?? null,
