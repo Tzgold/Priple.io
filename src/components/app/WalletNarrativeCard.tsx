@@ -26,6 +26,7 @@ const WALLET_SUGGESTIONS = [
 
 const COIN_SUGGESTIONS = [
   "Any news headlines?",
+  "Run the security checklist",
   "Which tracked wallets bought?",
   "What's the liquidity risk?",
   "Show social / posts signals",
@@ -184,7 +185,7 @@ export function WalletNarrativeCard({
   const suggestions = resolvedSubject?.type === "coin" ? COIN_SUGGESTIONS : WALLET_SUGGESTIONS;
   const askHint =
     resolvedSubject?.type === "coin"
-      ? "Ask about news links, tracked buys, holder concentration, liquidity, or social heat."
+      ? "Ask about security flags, news links, tracked buys, holder concentration, liquidity, or social heat."
       : "Ask about buys, sells, window flow, holdings, or whether this feed is live.";
 
   useEffect(() => {

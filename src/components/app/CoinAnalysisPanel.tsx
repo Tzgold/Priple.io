@@ -1,12 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Droplets, Globe, Newspaper, Radio, Shield, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleHelp,
+  Droplets,
+  Globe,
+  Newspaper,
+  Radio,
+  Shield,
+  ShieldAlert,
+  Users,
+  XCircle,
+} from "lucide-react";
 import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
 import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { cn } from "@/lib/cn";
 import { buildCoinNarrativeTemplate } from "@/lib/coin-narrative";
-import type { CoinAnalysis } from "@/lib/coin-analysis";
+import type { CoinAnalysis, SecurityCheckStatus } from "@/lib/coin-analysis";
 
 function safeHttpUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -208,6 +220,63 @@ export function CoinAnalysisPanel({
               <Mini label="Next 20" value={analysis.holders.next20Label} />
             </div>
             <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2.5">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                  <ShieldAlert className="h-3 w-3" /> Security desk
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase",
+                    analysis.security.level === "high"
+                      ? "border-rose-500/30 text-rose-300"
+                      : analysis.security.level === "medium"
+                        ? "border-amber-500/30 text-amber-200"
+                        : analysis.security.level === "low"
+                          ? "border-teal-500/30 text-teal-300"
+                          : "border-white/10 text-zinc-500",
+                  )}
+                >
+                  {analysis.security.level} · GT {analysis.security.gtScoreLabel}
+                </span>
+              </div>
+              <p className="mb-3 font-mono text-[11px] leading-5 text-zinc-400">
+                {analysis.security.summary}
+              </p>
+              <ul className="space-y-2">
+                {analysis.security.checks.map((check) => (
+                  <li
+                    key={check.id}
+                    className="flex gap-2.5 rounded-xl border border-white/[0.04] bg-black/20 px-2.5 py-2"
+                  >
+                    <SecurityStatusIcon status={check.status} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-[11px] text-zinc-200">{check.label}</p>
+                        <span
+                          className={cn(
+                            "font-mono text-[9px] uppercase tracking-[0.12em]",
+                            check.status === "pass"
+                              ? "text-teal-400/90"
+                              : check.status === "fail"
+                                ? "text-rose-300"
+                                : check.status === "warn"
+                                  ? "text-amber-200"
+                                  : "text-zinc-600",
+                          )}
+                        >
+                          {check.status}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 font-mono text-[10px] leading-4 text-zinc-500">
+                        {check.detail}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2.5">
               <p className="mb-2 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
                 <Shield className="h-3 w-3" /> Risk notes
               </p>
@@ -324,6 +393,19 @@ function Mini({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-mono text-[12px] text-zinc-200">{value}</p>
     </div>
   );
+}
+
+function SecurityStatusIcon({ status }: { status: SecurityCheckStatus }) {
+  if (status === "pass") {
+    return <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" />;
+  }
+  if (status === "fail") {
+    return <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />;
+  }
+  if (status === "warn") {
+    return <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />;
+  }
+  return <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" />;
 }
 
 function StructureCard({
