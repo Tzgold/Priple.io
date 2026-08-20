@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
   CheckCircle2,
   CircleHelp,
   Droplets,
@@ -12,6 +14,7 @@ import {
   Shield,
   ShieldAlert,
   Users,
+  Waves,
   XCircle,
 } from "lucide-react";
 import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
@@ -102,8 +105,31 @@ export function CoinAnalysisPanel({
     ? buildCoinNarrativeTemplate(analysis, trackedWalletBuys ?? 0)
     : null;
 
+  const narrativeSubject = useMemo(
+    () => ({
+      type: "coin" as const,
+      network,
+      address,
+      whyHere,
+      trackedWalletBuys,
+    }),
+    [network, address, whyHere, trackedWalletBuys],
+  );
+
+  const hasHolderStats =
+    analysis != null &&
+    (analysis.holders.countLabel !== "—" ||
+      analysis.holders.top10Label !== "—" ||
+      analysis.holders.next20Label !== "—");
+
+  const hasMarketStats =
+    analysis != null &&
+    [analysis.market.priceLabel, analysis.market.mcapLabel, analysis.market.liquidityLabel].some(
+      (value) => value !== "—",
+    );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" key={`${network}:${address.toLowerCase()}`}>
     <section className="rounded-[20px] border border-white/[0.08] bg-black/30 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -113,6 +139,11 @@ export function CoinAnalysisPanel({
           <h3 className="mt-1 font-sans text-[16px] font-semibold text-white">
             {loading ? "Reading market + on-chain feeds…" : `${analysis?.symbol ?? "Token"} desk`}
           </h3>
+          {!loading && analysis ? (
+            <p className="mt-1 font-mono text-[11px] text-zinc-500">
+              {analysis.headline}
+            </p>
+          ) : null}
         </div>
         {analysis ? (
           <span
@@ -136,8 +167,29 @@ export function CoinAnalysisPanel({
         <p className="mt-4 font-mono text-[12px] text-rose-300">{error}</p>
       ) : null}
 
+      {loading && !analysis ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-16 animate-pulse rounded-2xl border border-white/[0.05] bg-white/[0.03]"
+            />
+          ))}
+        </div>
+      ) : null}
+
       {analysis ? (
         <div className="mt-4 space-y-4">
+          {analysis.summary.length > 0 ? (
+            <ul className="space-y-1.5 rounded-2xl border border-white/[0.06] bg-black/20 px-3.5 py-3">
+              {analysis.summary.slice(0, 4).map((line) => (
+                <li key={line} className="font-mono text-[12px] leading-5 text-zinc-300">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           {analysis.opportunity ? (
             <OpportunityScoreCard score={analysis.opportunity} compact />
           ) : null}
@@ -204,21 +256,30 @@ export function CoinAnalysisPanel({
                   Telegram
                 </a>
               ) : null}
+              {!website && !analysis.social.twitter && !analysis.social.telegram ? (
+                <p className="font-mono text-[10px] text-zinc-600">No public social links in feeds.</p>
+              ) : null}
             </div>
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Mini label={analysis.market.mcapKind} value={analysis.market.mcapLabel} />
-              <Mini label="Price" value={analysis.market.priceLabel} />
-              <Mini label="24H" value={analysis.market.change24hLabel} />
-              <Mini label="Liquidity" value={analysis.market.liquidityLabel} />
-              <Mini label="24H Vol" value={analysis.market.volumeLabel} />
-              <Mini label="Liq / MCap" value={analysis.market.depthLabel || "—"} />
-              <Mini label="Holders" value={analysis.holders.countLabel} />
-              <Mini label="Top 10" value={analysis.holders.top10Label} />
-              <Mini label="Next 20" value={analysis.holders.next20Label} />
-            </div>
+            {hasMarketStats || hasHolderStats ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Mini label={analysis.market.mcapKind} value={analysis.market.mcapLabel} />
+                <Mini label="Price" value={analysis.market.priceLabel} />
+                <Mini label="24H" value={analysis.market.change24hLabel} />
+                <Mini label="Liquidity" value={analysis.market.liquidityLabel} />
+                <Mini label="24H Vol" value={analysis.market.volumeLabel} />
+                <Mini label="Liq / MCap" value={analysis.market.depthLabel || "—"} />
+                <Mini label="Holders" value={analysis.holders.countLabel} />
+                <Mini label="Top 10" value={analysis.holders.top10Label} />
+                <Mini label="Next 20" value={analysis.holders.next20Label} />
+              </div>
+            ) : (
+              <p className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-3 font-mono text-[11px] text-zinc-500">
+                Market / holder stats not in this window’s feeds yet.
+              </p>
+            )}
             <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2.5">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
@@ -295,6 +356,118 @@ export function CoinAnalysisPanel({
           </div>
           </div>
 
+          <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                <Waves className="h-3 w-3" /> Flow / tape
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] text-zinc-500">
+                  {analysis.flow.buys} buy · {analysis.flow.sells} sell
+                </span>
+                <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+                  Tape vol {analysis.flow.volumeUsdLabel}
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 font-mono text-[11px] leading-5 text-zinc-400">
+              {analysis.flow.summary}
+            </p>
+            {analysis.flow.poolName ? (
+              <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                Pool · {analysis.flow.poolName}
+              </p>
+            ) : null}
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+                  Tracked desks
+                </p>
+                {analysis.flow.tracked.length === 0 ? (
+                  <p className="font-mono text-[11px] text-zinc-600">
+                    No tracked wallet prints on this coin in the personal window.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {analysis.flow.tracked.slice(0, 8).map((row, index) => (
+                      <li
+                        key={`${row.walletLabel}-${row.time}-${index}`}
+                        className="flex items-start justify-between gap-2 rounded-xl border border-white/[0.04] bg-black/25 px-2.5 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-[11px] text-zinc-200">
+                            {row.walletLabel}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[10px] text-zinc-500">
+                            {row.amount} · {row.usd} · {row.date} {row.time}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "inline-flex shrink-0 items-center gap-0.5 font-mono text-[10px] uppercase",
+                            row.side === "buy" ? "text-teal-300" : "text-rose-300",
+                          )}
+                        >
+                          {row.side === "buy" ? (
+                            <ArrowUpRight className="h-3 w-3" />
+                          ) : (
+                            <ArrowDownRight className="h-3 w-3" />
+                          )}
+                          {row.side}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.14em] text-zinc-600">
+                  Recent pool prints
+                </p>
+                {analysis.flow.recent.length === 0 ? (
+                  <p className="font-mono text-[11px] text-zinc-600">
+                    No recent pool prints above $1 in this window.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {analysis.flow.recent.slice(0, 8).map((row) => (
+                      <li
+                        key={row.id}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.04] bg-black/25 px-2.5 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-mono text-[11px] text-zinc-200">{row.usd}</p>
+                          <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
+                            {row.trader ?? "trader —"} · {row.time}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "inline-flex shrink-0 items-center gap-0.5 font-mono text-[10px] uppercase",
+                            row.side === "buy"
+                              ? "text-teal-300"
+                              : row.side === "sell"
+                                ? "text-rose-300"
+                                : "text-zinc-500",
+                          )}
+                        >
+                          {row.side === "buy" ? (
+                            <ArrowUpRight className="h-3 w-3" />
+                          ) : row.side === "sell" ? (
+                            <ArrowDownRight className="h-3 w-3" />
+                          ) : null}
+                          {row.side}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
           {analysis.intel ? (
             <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -360,7 +533,11 @@ export function CoinAnalysisPanel({
                     </li>
                   ))}
                 </ul>
-              ) : null}
+              ) : (
+                <p className="mt-3 border-t border-white/[0.06] pt-3 font-mono text-[11px] text-zinc-600">
+                  No headlines in this window’s intel feeds.
+                </p>
+              )}
             </div>
           ) : null}
         </div>
@@ -371,15 +548,10 @@ export function CoinAnalysisPanel({
 
       {coinTemplate ? (
         <WalletNarrativeCard
+          key={`${network}:${address.toLowerCase()}:ask`}
           narrative={coinTemplate}
           variant="coin-desk"
-          subject={{
-            type: "coin",
-            network,
-            address,
-            whyHere,
-            trackedWalletBuys,
-          }}
+          subject={narrativeSubject}
         />
       ) : null}
     </div>
