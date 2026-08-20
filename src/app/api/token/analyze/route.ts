@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildPulseForWallets } from "@/lib/alchemy-pulse";
+import { buildPulseForWallets, type PulseItem } from "@/lib/alchemy-pulse";
 import {
   buildCoinAnalysis,
   withTrackedFlowMoves,
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    let analysis = await buildCoinAnalysis({
+    const analysisPromise = buildCoinAnalysis({
       network,
       address,
       whyHere,
@@ -42,13 +42,11 @@ export async function GET(request: Request) {
           ? Math.max(0, Math.floor(trackedWalletBuys))
           : undefined,
     });
-    if (!analysis) {
-      return NextResponse.json({ error: "Could not build analysis" }, { status: 404 });
-    }
 
-    const wallets = await listWallets(session.user.id);
-    if (wallets.length > 0) {
-      const pulse = await buildPulseForWallets(
+    const pulsePromise = (async (): Promise<PulseItem[]> => {
+      const wallets = await listWallets(session.user.id);
+      if (wallets.length === 0) return [];
+      return buildPulseForWallets(
         wallets.map((wallet) => ({
           label: wallet.label,
           address: wallet.address,
@@ -56,6 +54,15 @@ export async function GET(request: Request) {
         })),
         "personal",
       );
+    })().catch(() => [] as PulseItem[]);
+
+    const [analysisBase, pulse] = await Promise.all([analysisPromise, pulsePromise]);
+    if (!analysisBase) {
+      return NextResponse.json({ error: "Could not build analysis" }, { status: 404 });
+    }
+
+    let analysis = analysisBase;
+    if (pulse.length > 0) {
       const subject = coinSubjectKey(network, address);
       const trackedMoves = pulse.filter((item) => {
         if (item.source !== "personal") return false;
@@ -63,7 +70,7 @@ export async function GET(request: Request) {
         if (route) {
           return coinSubjectKey(route.network, route.address) === subject;
         }
-        return item.asset.toUpperCase() === analysis!.symbol.toUpperCase();
+        return item.asset.toUpperCase() === analysis.symbol.toUpperCase();
       });
       analysis = withTrackedFlowMoves(analysis, trackedMoves);
     }

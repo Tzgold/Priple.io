@@ -229,6 +229,8 @@ export async function fetchPoolOhlcv(input: {
   timeframe?: "minute" | "hour" | "day";
   aggregate?: number;
   limit?: number;
+  /** Soft mode: no 429 retries, fail fast for desk analysis paths. */
+  soft?: boolean;
 }): Promise<Candle[]> {
   const net = normalizeNetwork(input.network);
   const timeframe = input.timeframe ?? "minute";
@@ -240,21 +242,36 @@ export async function fetchPoolOhlcv(input: {
     `/networks/${net}/pools/${encodeURIComponent(input.poolAddress)}/ohlcv/${timeframe}` +
     `?aggregate=${aggregate}&limit=${limit}&currency=usd`;
 
-  const json = await gtGet(path, { noStore: false, retries: 3 });
-  const list =
-    (((json.data as Json | undefined)?.attributes as Json | undefined)?.ohlcv_list as
-      | unknown[]
-      | undefined) ?? [];
+  const soft = Boolean(input.soft);
+  const load = async () => {
+    const json = await gtGet(path, {
+      noStore: soft,
+      retries: soft ? 0 : 3,
+    });
+    const list =
+      (((json.data as Json | undefined)?.attributes as Json | undefined)?.ohlcv_list as
+        | unknown[]
+        | undefined) ?? [];
 
-  const candles: Candle[] = [];
-  for (const row of list) {
-    if (!Array.isArray(row) || row.length < 6) continue;
-    const [time, open, high, low, close, volume] = row.map((v) => Number(v));
-    if (![time, open, high, low, close].every(Number.isFinite)) continue;
-    candles.push({ time, open, high, low, close, volume: volume || 0 });
-  }
+    const candles: Candle[] = [];
+    for (const row of list) {
+      if (!Array.isArray(row) || row.length < 6) continue;
+      const [time, open, high, low, close, volume] = row.map((v) => Number(v));
+      if (![time, open, high, low, close].every(Number.isFinite)) continue;
+      candles.push({ time, open, high, low, close, volume: volume || 0 });
+    }
+    return normalizeCandles(candles);
+  };
 
-  return normalizeCandles(candles);
+  if (!soft) return load();
+
+  // Cap soft OHLCV so analysis never waits on GT backoff/429 storms.
+  return Promise.race([
+    load(),
+    new Promise<Candle[]>((resolve) => {
+      setTimeout(() => resolve([]), 2500);
+    }),
+  ]);
 }
 
 function normalizeCandles(candles: Candle[]): Candle[] {

@@ -80,19 +80,18 @@ export async function loadCoinNarrativePacket(
   whyHere?: string | null,
   trackedWalletBuys?: number,
 ): Promise<CoinNarrativePacket | null> {
-  let analysis = await buildCoinAnalysis({
+  const analysisPromise = buildCoinAnalysis({
     network,
     address,
     whyHere,
     trackedWalletBuys,
   });
-  if (!analysis) return null;
 
-  const wallets = await listWallets(userId);
-  let trackedMoves: PulseItem[] = [];
-  let clusters: ReturnType<typeof buildFlowsFromPulse>["clusters"] = [];
-
-  if (wallets.length > 0) {
+  const pulsePromise = (async () => {
+    const wallets = await listWallets(userId);
+    if (wallets.length === 0) {
+      return { trackedMoves: [] as PulseItem[], clusters: [] as ReturnType<typeof buildFlowsFromPulse>["clusters"] };
+    }
     const pulse = await buildPulseForWallets(
       wallets.map((wallet) => ({
         label: wallet.label,
@@ -101,7 +100,22 @@ export async function loadCoinNarrativePacket(
       })),
       "personal",
     );
-    trackedMoves = pulse.filter((item) => matchesCoin(network, address, analysis!.symbol, item));
+    return {
+      pulse,
+      wallets,
+    };
+  })().catch(() => ({ pulse: [] as PulseItem[], wallets: [] }));
+
+  const [analysisBase, pulseBundle] = await Promise.all([analysisPromise, pulsePromise]);
+  if (!analysisBase) return null;
+
+  let analysis = analysisBase;
+  let trackedMoves: PulseItem[] = [];
+  let clusters: ReturnType<typeof buildFlowsFromPulse>["clusters"] = [];
+
+  const pulse = "pulse" in pulseBundle ? pulseBundle.pulse ?? [] : [];
+  if (pulse.length > 0) {
+    trackedMoves = pulse.filter((item) => matchesCoin(network, address, analysis.symbol, item));
     clusters = buildFlowsFromPulse(pulse.filter((item) => item.source === "personal")).clusters;
     analysis = withTrackedFlowMoves(analysis, trackedMoves);
   }

@@ -999,14 +999,13 @@ export async function buildCoinAnalysis(input: {
     };
   }
 
-  try {
-    desk = await fetchTokenDesk(input.network, input.address);
-    if (desk) sources.push("GeckoTerminal");
-  } catch {
-    desk = null;
-  }
-
-  const enrich = await fetchDexScreenerEnrichment(input.address, input.network).catch(() => null);
+  const [deskResult, enrichResult] = await Promise.all([
+    fetchTokenDesk(input.network, input.address).catch(() => null),
+    fetchDexScreenerEnrichment(input.address, input.network).catch(() => null),
+  ]);
+  desk = deskResult;
+  const enrich = enrichResult;
+  if (desk) sources.push("GeckoTerminal");
   if (enrich) sources.push("DexScreener");
 
   if (!desk && !enrich) return null;
@@ -1014,7 +1013,7 @@ export async function buildCoinAnalysis(input: {
   const info =
     desk?.info ||
     (await fetchOnchainTokenInfo(input.network, input.address).catch(() => null));
-  if (info) sources.push("CoinGecko onchain");
+  if (info && !sources.includes("CoinGecko onchain")) sources.push("CoinGecko onchain");
 
   const merged: TokenDesk = desk
     ? {
@@ -1074,28 +1073,53 @@ export async function buildCoinAnalysis(input: {
   const security = buildSecurityDesk(merged.info?.security);
   const structure = buildStructure(merged, mcap.value);
 
-  let poolTrades: TokenTrade[] = [];
-  let hourCandles: Candle[] = [];
-  if (merged.poolAddress) {
-    const [tradesResult, candlesResult] = await Promise.all([
-      fetchPoolTrades(merged.network, merged.poolAddress, 24).catch(() => [] as TokenTrade[]),
-      fetchPoolOhlcv({
-        network: merged.network,
-        poolAddress: merged.poolAddress,
-        timeframe: "hour",
-        aggregate: 1,
-        limit: 48,
-      }).catch(() => [] as Candle[]),
-    ]);
-    poolTrades = tradesResult;
-    hourCandles = candlesResult;
-    if (poolTrades.length > 0 && !sources.includes("GeckoTerminal trades")) {
-      sources.push("GeckoTerminal trades");
-    }
-    if (hourCandles.length > 0 && !sources.includes("GeckoTerminal OHLCV")) {
-      sources.push("GeckoTerminal OHLCV");
+  const hasPoolWindows =
+    merged.priceChange1h != null &&
+    merged.priceChange6h != null &&
+    merged.priceChange24h != null;
+  const hasSocials = Boolean(
+    info?.socials.twitter ||
+      info?.socials.telegram ||
+      (info?.socials.websites?.length ?? 0) > 0,
+  );
+
+  const poolAddress = merged.poolAddress;
+  const [tradesResult, candlesResult, intel] = await Promise.all([
+    poolAddress
+      ? fetchPoolTrades(merged.network, poolAddress, 24).catch(() => [] as TokenTrade[])
+      : Promise.resolve([] as TokenTrade[]),
+    poolAddress && !hasPoolWindows
+      ? fetchPoolOhlcv({
+          network: merged.network,
+          poolAddress,
+          timeframe: "hour",
+          aggregate: 1,
+          limit: 24,
+          soft: true,
+        }).catch(() => [] as Candle[])
+      : Promise.resolve([] as Candle[]),
+    fetchCoinIntel({
+      network: input.network,
+      address: input.address,
+      coingeckoId: merged.coingeckoId,
+      symbol: merged.symbol,
+      hasSocialLinks: hasSocials,
+    }),
+  ]);
+  const poolTrades = tradesResult;
+  const hourCandles = candlesResult;
+  if (poolTrades.length > 0 && !sources.includes("GeckoTerminal trades")) {
+    sources.push("GeckoTerminal trades");
+  }
+  if (hourCandles.length > 0 && !sources.includes("GeckoTerminal OHLCV")) {
+    sources.push("GeckoTerminal OHLCV");
+  }
+  if (intel.sources.length > 0) {
+    for (const source of intel.sources) {
+      if (!sources.includes(source)) sources.push(source);
     }
   }
+
   const flow = buildFlowTape({
     poolName: merged.poolName,
     poolAddress: merged.poolAddress,
@@ -1110,6 +1134,10 @@ export async function buildCoinAnalysis(input: {
     liquidityUsd: merged.liquidityUsd,
     candles: hourCandles,
   });
+  if (hasPoolWindows && hourCandles.length === 0) {
+    momentum.rangeLabel =
+      "Candle range skipped — pool already published 1H/6H/24H windows.";
+  }
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
       ? `${((merged.liquidityUsd / mcap.value) * 100).toFixed(1)}% liq / mcap`
@@ -1131,7 +1159,7 @@ export async function buildCoinAnalysis(input: {
   if (mcap.value != null) {
     summary.push(`${mcap.label} prints around ${money(mcap.value)}.`);
   }
-  if (info?.socials.twitter || info?.socials.telegram || (info?.socials.websites?.length ?? 0) > 0) {
+  if (hasSocials) {
     summary.push("Public social / web links are available — check them before sizing any idea.");
   } else {
     summary.push("Little verified social presence in feeds — treat narrative claims carefully.");
@@ -1141,25 +1169,6 @@ export async function buildCoinAnalysis(input: {
     input.whyHere?.startsWith("Tracked")
       ? `${merged.symbol}: on your radar because a tracked wallet moved it`
       : `${merged.symbol}: live desk brief from market + on-chain feeds`;
-
-  const hasSocials = Boolean(
-    info?.socials.twitter ||
-      info?.socials.telegram ||
-      (info?.socials.websites?.length ?? 0) > 0,
-  );
-
-  const intel = await fetchCoinIntel({
-    network: input.network,
-    address: input.address,
-    coingeckoId: merged.coingeckoId,
-    symbol: merged.symbol,
-    hasSocialLinks: hasSocials,
-  });
-  if (intel.sources.length > 0) {
-    for (const source of intel.sources) {
-      if (!sources.includes(source)) sources.push(source);
-    }
-  }
 
   const opportunity = computeOpportunityScore({
     change24h: change,
