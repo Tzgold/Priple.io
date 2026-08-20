@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Bell, Radio, Shuffle, Target, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/app/DashboardShell";
+import { useAddWallet } from "@/components/app/WalletModalProvider";
 import { useDesk } from "@/lib/app-store";
 import { cn } from "@/lib/cn";
 
@@ -33,6 +35,7 @@ type AlertRule = {
 
 export default function AlertsPage() {
   const { alerts, trackedWallets, dismissAlert, refreshAlerts } = useDesk();
+  const { openAddWallet } = useAddWallet();
   const [open, setOpen] = useState(false);
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -187,8 +190,27 @@ export default function AlertsPage() {
             </li>
           ))}
           {rules.length === 0 ? (
-            <li className="rounded-[18px] border border-dashed border-white/10 px-4 py-6 text-center font-mono text-[12px] text-zinc-600">
-              No rules yet. Create one to watch a wallet size threshold.
+            <li className="rounded-[18px] border border-dashed border-white/10 px-4 py-6 text-center">
+              <p className="font-mono text-[12px] text-zinc-400">
+                No custom rules yet. Track a wallet, then set a size threshold.
+              </p>
+              <p className="mt-2 font-mono text-[11px] text-zinc-600">
+                Default inbox still logs transfers ≥ $25k without a rule when pulse refreshes.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" variant="secondary" onClick={openAddWallet}>
+                  Track wallet
+                </Button>
+                <Button size="sm" onClick={() => setOpen(true)}>
+                  New rule
+                </Button>
+                <Link
+                  href="/app/wallets"
+                  className="font-mono text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+                >
+                  Open wallets
+                </Link>
+              </div>
             </li>
           ) : null}
         </ul>
@@ -233,8 +255,28 @@ export default function AlertsPage() {
             );
           })}
           {alerts.length === 0 ? (
-            <li className="py-10 text-center font-mono text-[12px] text-zinc-600">
-              No inbox events yet. Pulse + rules will fill this as wallets move.
+            <li className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center">
+              <p className="font-mono text-[12px] text-zinc-400">
+                Inbox is empty — waiting on live pulse from desks you track.
+              </p>
+              <p className="mt-2 font-mono text-[11px] leading-5 text-zinc-600">
+                Track a wallet → optional size rule → refresh Overview/pulse → events land here.
+                Large transfers (≥ $25k) still alert without a custom rule.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" onClick={() => setOpen(true)}>
+                  New rule
+                </Button>
+                <Button size="sm" variant="secondary" onClick={openAddWallet}>
+                  Track wallet
+                </Button>
+                <Link
+                  href="/app/settings"
+                  className="font-mono text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+                >
+                  Email delivery
+                </Link>
+              </div>
             </li>
           ) : null}
         </ul>

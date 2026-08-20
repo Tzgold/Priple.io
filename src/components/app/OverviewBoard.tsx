@@ -61,7 +61,6 @@ export function OverviewBoard() {
     trackedCount,
     pulseThreshold,
     personalMode,
-    alerts,
     savedAlerts,
     ready,
     refreshAlerts,
@@ -110,10 +109,7 @@ export function OverviewBoard() {
   const live = pulse?.live ?? false;
   const remaining = Math.max(pulseThreshold - trackedCount, 0);
 
-  const inbox = useMemo(() => {
-    if (savedAlerts.length > 0) return savedAlerts.slice(0, 4);
-    return alerts.slice(0, 3);
-  }, [savedAlerts, alerts]);
+  const inbox = useMemo(() => savedAlerts.slice(0, 4), [savedAlerts]);
 
   const dates = [...new Set(items.map((item) => item.date))];
 
@@ -416,6 +412,19 @@ export function OverviewBoard() {
               </li>
             );
           })}
+          {inbox.length === 0 ? (
+            <li className="rounded-[18px] border border-dashed border-white/10 px-4 py-5 text-center">
+              <p className="font-mono text-[12px] text-zinc-500">
+                No pulse alerts yet. Track desks and optional size rules on Alerts — events land when wallets move.
+              </p>
+              <Link
+                href="/app/alerts"
+                className="mt-2 inline-block font-mono text-[11px] text-zinc-400 underline underline-offset-2 hover:text-white"
+              >
+                Set up a rule →
+              </Link>
+            </li>
+          ) : null}
         </ul>
       </section>
     </div>
