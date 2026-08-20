@@ -3,6 +3,7 @@ import { generateText, Output, streamText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { NarrativePacket } from "@/lib/narrative-packet";
 import { briefingDriftedFromPacket } from "@/lib/narrative-packet";
+import { buildAskMoreResearchPrompt } from "@/lib/narrative-research";
 import type { WalletNarrative } from "@/lib/wallet-narrative";
 
 const MODEL_PRIMARY = process.env.OPENAI_MODEL_PRIMARY ?? "openai/gpt-4o-mini";
@@ -77,8 +78,10 @@ function systemForPacket(packet: NarrativePacket) {
 export const ASK_MORE_SYSTEM = `You are answering a follow-up question about THIS packet and briefing only.
 
 Answer quality (required):
+- Follow the Required structure in the user message (Lead → Evidence → Gaps → Links).
 - Fully answer what the user asked. Do not give one-line replies when the packet has detail.
 - Prefer 1 short lead sentence, then structured bullets or numbered items with the facts.
+- Use the Research brief first; fall back to the full packet for related fields only.
 - Pull every relevant field from the packet — amounts, USD, times, wallets, risk notes, headlines, links, social counts.
 - If they ask about news: list each relevant headline with title, source, and the exact https URL.
 - If they ask about trades / buys / sells / profit: list the relevant rows and use tradeSummary; clearly say netFlowUsd is window flow, not realized PnL.
@@ -122,23 +125,6 @@ If profit is implied, clarify tradeSummary is window flow only, not realized PnL
 
 Packet:
 ${packetPrompt(packet)}`;
-}
-
-function askMorePromptFor(packet: NarrativePacket, message: string) {
-  if (packet.subject.type === "coin") {
-    return `User question: ${message}
-
-Write a thorough desk answer for this coin.
-Cover every part of the question using market, holders, holderMap.bands, momentum.windows, tracked.moves, tape.recent, risk, security.checks, structure, social, intel.headlines (with URLs), opportunity, and flows when relevant.
-Use bullets for lists. Paste exact https URLs from intel.headlines when citing news.`;
-  }
-
-  return `User question: ${message}
-
-Write a thorough desk answer for this wallet.
-Cover every part of the question using activity (include hash/network when listing trades), tradeSummary, desk (bias / feed), holdings (symbol + balance), flows, and window.live.
-List concrete trades (side, asset, amount, usd, time) when relevant.
-If profit/PnL is asked, explain using tradeSummary and state it is not realized profit.`;
 }
 
 function packetPrompt(packet: NarrativePacket) {
@@ -230,7 +216,7 @@ ${JSON.stringify({
     ...prior,
     {
       role: "user" as const,
-      content: askMorePromptFor(input.packet, input.message),
+      content: buildAskMoreResearchPrompt(input.packet, input.message),
     },
   ];
 
@@ -240,7 +226,7 @@ ${JSON.stringify({
       model: or(MODEL_PRIMARY),
       system,
       messages,
-      maxOutputTokens: 1600,
+      maxOutputTokens: 2000,
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch {
@@ -248,7 +234,7 @@ ${JSON.stringify({
       model: or(MODEL_FALLBACK),
       system,
       messages,
-      maxOutputTokens: 1600,
+      maxOutputTokens: 2000,
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
     });
   }
