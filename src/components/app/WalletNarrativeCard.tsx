@@ -27,9 +27,9 @@ const WALLET_SUGGESTIONS = [
 const COIN_SUGGESTIONS = [
   "Any news headlines?",
   "Run the security checklist",
+  "Show recent pool tape",
   "Which tracked wallets bought?",
   "What's the liquidity risk?",
-  "Show social / posts signals",
 ];
 
 function linkifyText(text: string) {
@@ -166,10 +166,39 @@ export function WalletNarrativeCard({
   const isCoinDesk = variant === "coin-desk";
 
   const resolvedSubject = useMemo<NarrativeSubject | null>(() => {
-    if (subject) return subject;
+    if (subject?.type === "coin") {
+      return {
+        type: "coin",
+        network: subject.network,
+        address: subject.address,
+        whyHere: subject.whyHere ?? null,
+        trackedWalletBuys: subject.trackedWalletBuys,
+      };
+    }
+    if (subject?.type === "wallet") {
+      return { type: "wallet", walletId: subject.walletId };
+    }
     if (walletId) return { type: "wallet", walletId };
     return null;
-  }, [subject, walletId]);
+  }, [
+    subject?.type,
+    subject && subject.type === "wallet" ? subject.walletId : null,
+    subject && subject.type === "coin" ? subject.network : null,
+    subject && subject.type === "coin" ? subject.address : null,
+    subject && subject.type === "coin" ? subject.whyHere ?? null : null,
+    subject && subject.type === "coin" ? subject.trackedWalletBuys ?? null : null,
+    walletId,
+  ]);
+
+  /** Stable key so object identity / narrative rebuilds don't wipe the chat thread. */
+  const subjectKey = useMemo(() => {
+    if (!resolvedSubject) return null;
+    if (resolvedSubject.type === "wallet") return `wallet:${resolvedSubject.walletId}`;
+    return `coin:${resolvedSubject.network}:${resolvedSubject.address.toLowerCase()}`;
+  }, [resolvedSubject]);
+
+  const subjectRef = useRef(resolvedSubject);
+  subjectRef.current = resolvedSubject;
 
   const [briefing, setBriefing] = useState(narrative);
   const [origin, setOrigin] = useState<NarrativeOrigin>("template");
@@ -181,39 +210,46 @@ export function WalletNarrativeCard({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const activeSubjectKey = useRef<string | null>(subjectKey);
 
   const suggestions = resolvedSubject?.type === "coin" ? COIN_SUGGESTIONS : WALLET_SUGGESTIONS;
   const askHint =
     resolvedSubject?.type === "coin"
-      ? "Ask about security flags, news links, tracked buys, holder concentration, liquidity, or social heat."
+      ? "Ask about security flags, pool tape, news links, tracked buys, holder concentration, or liquidity."
       : "Ask about buys, sells, window flow, holdings, or whether this feed is live.";
 
+  // Seed local briefing from props only when the subject changes — not on every parent re-render.
   useEffect(() => {
+    activeSubjectKey.current = subjectKey;
     setBriefing(narrative);
     setOrigin("template");
     setThreadId(null);
     setMessages([]);
+    setDraft("");
     setError(null);
-  }, [narrative, resolvedSubject]);
+    setSending(false);
+    setAskOpen(isCoinDesk || !compact);
+  }, [subjectKey]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: reset only on subject change
 
   useEffect(() => {
-    if (!resolvedSubject) return;
+    if (!subjectKey) return;
     let cancelled = false;
 
     async function load() {
-      if (!resolvedSubject) return;
+      const current = subjectRef.current;
+      if (!current || !subjectKey) return;
       setWriting(true);
       setError(null);
       try {
         const body =
-          resolvedSubject.type === "wallet"
-            ? { type: "wallet", walletId: resolvedSubject.walletId }
+          current.type === "wallet"
+            ? { type: "wallet", walletId: current.walletId }
             : {
                 type: "coin",
-                network: resolvedSubject.network,
-                address: resolvedSubject.address,
-                whyHere: resolvedSubject.whyHere ?? undefined,
-                trackedWalletBuys: resolvedSubject.trackedWalletBuys,
+                network: current.network,
+                address: current.address,
+                whyHere: current.whyHere ?? undefined,
+                trackedWalletBuys: current.trackedWalletBuys,
               };
 
         const res = await fetch("/api/narrative/brief", {
@@ -229,7 +265,7 @@ export function WalletNarrativeCard({
           messages?: NarrativeMessage[];
           error?: string;
         };
-        if (cancelled) return;
+        if (cancelled || activeSubjectKey.current !== subjectKey) return;
         if (!res.ok || !data.briefing || !data.threadId) {
           setError(data.error || "Couldn't reach the model — template briefing is showing");
           return;
@@ -239,11 +275,11 @@ export function WalletNarrativeCard({
         setThreadId(data.threadId);
         setMessages(data.messages ?? []);
       } catch {
-        if (!cancelled) {
+        if (!cancelled && activeSubjectKey.current === subjectKey) {
           setError("Couldn't reach the model — template briefing is showing");
         }
       } finally {
-        if (!cancelled) setWriting(false);
+        if (!cancelled && activeSubjectKey.current === subjectKey) setWriting(false);
       }
     }
 
@@ -251,7 +287,7 @@ export function WalletNarrativeCard({
     return () => {
       cancelled = true;
     };
-  }, [resolvedSubject]);
+  }, [subjectKey]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -260,7 +296,8 @@ export function WalletNarrativeCard({
 
   async function sendAskMore(textRaw?: string) {
     const text = (textRaw ?? draft).trim();
-    if (!threadId || !text || sending) return;
+    const sendKey = subjectKey;
+    if (!threadId || !text || sending || !sendKey) return;
     setDraft("");
     setSending(true);
     setError(null);
@@ -279,13 +316,17 @@ export function WalletNarrativeCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threadId, message: text }),
       });
+      if (activeSubjectKey.current !== sendKey) return;
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         setError(data?.error || "Couldn't reach the model — try again");
         return;
       }
       const reader = res.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        setError("Couldn't stream the answer — try again");
+        return;
+      }
       const decoder = new TextDecoder();
       let acc = "";
       const assistantId = `asst-${Date.now()}`;
@@ -296,21 +337,32 @@ export function WalletNarrativeCard({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (activeSubjectKey.current !== sendKey) {
+          reader.cancel().catch(() => undefined);
+          return;
+        }
         acc += decoder.decode(value, { stream: true });
         const snapshot = acc;
         setMessages((current) =>
           current.map((row) => (row.id === assistantId ? { ...row, content: snapshot } : row)),
         );
       }
+      if (!acc.trim() && activeSubjectKey.current === sendKey) {
+        setError("Model returned an empty answer — try again");
+      }
     } catch {
-      setError("Couldn't reach the model — try again");
+      if (activeSubjectKey.current === sendKey) {
+        setError("Couldn't reach the model — try again");
+      }
     } finally {
-      setSending(false);
+      if (activeSubjectKey.current === sendKey) setSending(false);
     }
   }
 
   const lines = compact ? briefing.paragraphs.slice(0, 2) : briefing.paragraphs;
   const showBriefing = !isCoinDesk;
+  const chatLocked = !resolvedSubject;
+  const chatBusy = Boolean(resolvedSubject) && (writing || !threadId);
 
   const chatSection = (
     <div className={cn(!isCoinDesk && "mt-4 border-t border-white/[0.06] pt-4", isCoinDesk && "pt-0")}>
@@ -336,7 +388,11 @@ export function WalletNarrativeCard({
         </div>
       </div>
 
-      {messages.length === 0 ? (
+      {chatLocked ? (
+        <p className="mt-2 font-mono text-[11px] leading-5 text-amber-200/90">
+          Track this wallet to unlock Ask more — research threads are tied to a saved desk.
+        </p>
+      ) : messages.length === 0 ? (
         <p className="mt-2 font-mono text-[11px] leading-5 text-zinc-500">{askHint}</p>
       ) : (
         <ul
@@ -354,7 +410,7 @@ export function WalletNarrativeCard({
           <button
             key={suggestion}
             type="button"
-            disabled={!threadId || sending || writing}
+            disabled={chatLocked || chatBusy || sending}
             onClick={() => void sendAskMore(suggestion)}
             className="rounded-full border border-white/10 bg-white/[0.02] px-2.5 py-1 font-mono text-[10px] text-zinc-400 transition hover:border-teal-500/30 hover:text-zinc-200 disabled:opacity-40"
           >
@@ -373,16 +429,22 @@ export function WalletNarrativeCard({
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          disabled={!threadId || sending || writing}
+          disabled={chatLocked || chatBusy || sending}
           maxLength={600}
-          placeholder={isCoinDesk ? "Ask Priple about this coin…" : "Ask about this window…"}
+          placeholder={
+            chatLocked
+              ? "Track wallet to ask…"
+              : isCoinDesk
+                ? "Ask Priple about this coin…"
+                : "Ask about this window…"
+          }
           className="h-10 w-full flex-1 rounded-full border border-white/10 bg-black/40 px-4 font-mono text-[12px] text-white outline-none ring-teal-500/0 transition placeholder:text-zinc-600 focus:border-teal-500/40 focus:ring-2 focus:ring-teal-500/20 disabled:opacity-50"
         />
         <Button
           type="submit"
           size="sm"
           variant="secondary"
-          disabled={!threadId || sending || writing || !draft.trim()}
+          disabled={chatLocked || chatBusy || sending || !draft.trim()}
           className="h-10 w-full shrink-0 sm:w-auto"
         >
           <span className="inline-flex items-center gap-1.5">
