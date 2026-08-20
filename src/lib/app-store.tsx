@@ -45,7 +45,14 @@ type DeskContextValue = {
   sort: WalletSort;
   emailAlerts: boolean;
   defaultChart: ChartPref;
+  /** API wallets/alerts/settings loaded. */
   ready: boolean;
+  /**
+   * localStorage prefs + watchlist have been read.
+   * Until true, watchedTokens is always [] so SSR and the first client
+   * render match (avoids hydration mismatches on the rail).
+   */
+  hydrated: boolean;
   addWallet: (input: { label: string; address: string; chain: string }) => Promise<void>;
   removeWallet: (id: string) => Promise<void>;
   setSort: (sort: WalletSort) => void;
@@ -64,9 +71,11 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<DeskPrefs>(defaultPrefs);
   const [savedWallets, setSavedWallets] = useState<TrackedWallet[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<AlertItem[]>([]);
-  const [watchedTokens, setWatchedTokens] = useState<WatchedToken[]>([]);
+  const [watchedTokensState, setWatchedTokens] = useState<WatchedToken[]>([]);
   const [ready, setReady] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
+  // Read localStorage once after mount. Never during render — that desyncs SSR HTML.
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(PREFS_KEY);
@@ -85,18 +94,22 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {
       setPrefs(defaultPrefs);
+    } finally {
+      setHydrated(true);
     }
   }, []);
 
+  // Persist only after the initial read finished — otherwise ready=true with
+  // empty watchedTokens would wipe the user's pins to [].
   useEffect(() => {
-    if (!ready) return;
+    if (!hydrated || !ready) return;
     window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  }, [prefs, ready]);
+  }, [prefs, ready, hydrated]);
 
   useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(WATCH_TOKENS_KEY, JSON.stringify(watchedTokens));
-  }, [watchedTokens, ready]);
+    if (!hydrated || !ready) return;
+    window.localStorage.setItem(WATCH_TOKENS_KEY, JSON.stringify(watchedTokensState));
+  }, [watchedTokensState, ready, hydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +155,8 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Stable empty list during SSR + first client paint so rail markup matches.
+  const watchedTokens = hydrated ? watchedTokensState : [];
   const sortWallets = (list: TrackedWallet[]) =>
     [...list].sort((a, b) => {
       if (prefs.sort === "name") return a.label.localeCompare(b.label);
@@ -173,8 +188,8 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
 
   const isTokenWatched = useCallback(
     (network: string, address: string) =>
-      watchedTokens.some((t) => t.id === watchedTokenId(network, address)),
-    [watchedTokens],
+      watchedTokensState.some((t) => t.id === watchedTokenId(network, address)),
+    [watchedTokensState],
   );
 
   const toggleWatchToken = useCallback((token: Omit<WatchedToken, "id" | "addedAt">) => {
@@ -205,6 +220,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       emailAlerts: prefs.emailAlerts,
       defaultChart: prefs.defaultChart,
       ready,
+      hydrated,
       addWallet: async ({ label, address, chain }) => {
         const res = await fetch("/api/wallets", {
           method: "POST",
@@ -272,6 +288,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       prefs.emailAlerts,
       prefs.defaultChart,
       ready,
+      hydrated,
       savedWallets,
       refreshAlerts,
       isTokenWatched,

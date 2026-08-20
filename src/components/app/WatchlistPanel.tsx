@@ -41,7 +41,8 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { trackedWallets, marketWallets, personalMode, sort, setSort, watchedTokens } = useDesk();
+  const { trackedWallets, marketWallets, personalMode, sort, setSort, watchedTokens, hydrated } =
+    useDesk();
   const { openAddWallet } = useAddWallet();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,6 +51,10 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
   const { trending, watchlist, walletBuys, majors, topScore, loading } = useScreenerBoard({
     enabled: !onWallets,
   });
+  // Pinned coins live in localStorage — only show them after desk hydration so
+  // SSR placeholders and the first client paint stay identical.
+  const pinnedCoins = hydrated ? watchedTokens.slice(0, 10) : [];
+  const showPinned = pinnedCoins.length > 0;
   const activeId = (() => {
     const network = searchParams.get("network");
     const address = searchParams.get("address");
@@ -177,21 +182,8 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
               Coin watchlist
             </p>
             <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {watchedTokens.length === 0
-                ? watchTokens.map((token) => (
-                    <Link
-                      key={token.symbol}
-                      href={`/app/screener?token=${token.symbol}`}
-                      className="flex w-11 shrink-0 flex-col items-center gap-2 opacity-50"
-                      title={`${token.name} (pin coins from screener)`}
-                    >
-                      <TokenMark symbol={token.symbol} size={36} />
-                      <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-600">
-                        {token.symbol}
-                      </span>
-                    </Link>
-                  ))
-                : watchedTokens.slice(0, 10).map((token) => (
+              {showPinned
+                ? pinnedCoins.map((token) => (
                     <Link
                       key={token.id}
                       href={`/app/screener?network=${encodeURIComponent(token.network)}&address=${encodeURIComponent(token.address)}`}
@@ -200,6 +192,19 @@ export function WatchlistPanel({ workspace }: { workspace: string }) {
                     >
                       <TokenMark symbol={token.symbol} imageUrl={token.imageUrl} size={36} />
                       <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-500">
+                        {token.symbol}
+                      </span>
+                    </Link>
+                  ))
+                : watchTokens.map((token) => (
+                    <Link
+                      key={token.symbol}
+                      href={`/app/screener?token=${token.symbol}`}
+                      className="flex w-11 shrink-0 flex-col items-center gap-2 opacity-50"
+                      title={`${token.name} (pin coins from screener)`}
+                    >
+                      <TokenMark symbol={token.symbol} size={36} />
+                      <span className="font-mono text-[9px] uppercase tracking-wide text-zinc-600">
                         {token.symbol}
                       </span>
                     </Link>
