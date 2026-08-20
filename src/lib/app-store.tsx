@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { PERSONAL_PULSE_THRESHOLD } from "@/lib/curated-wallets";
 import {
-  mockAlerts,
   mockMoves,
   mockTokens,
   mockWallets,
@@ -23,14 +22,12 @@ type DeskPrefs = {
   sort: WalletSort;
   emailAlerts: boolean;
   defaultChart: ChartPref;
-  dismissedMockAlertIds: string[];
 };
 
 const defaultPrefs: DeskPrefs = {
   sort: "score",
   emailAlerts: true,
   defaultChart: "dexscreener",
-  dismissedMockAlertIds: [],
 };
 
 type DeskContextValue = {
@@ -161,13 +158,7 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
     return sortWallets([...savedWallets, ...mockWallets]);
   }, [personalMode, trackedWallets, savedWallets, prefs.sort]);
 
-  const alerts = useMemo(
-    () =>
-      [...savedAlerts, ...mockAlerts].filter(
-        (alert) => !prefs.dismissedMockAlertIds.includes(alert.id),
-      ),
-    [savedAlerts, prefs.dismissedMockAlertIds],
-  );
+  const alerts = savedAlerts;
 
   const refreshAlerts = useCallback(async () => {
     try {
@@ -252,22 +243,16 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
       },
       dismissAlert: async (id) => {
         const isSaved = savedAlerts.some((alert) => alert.id === id);
-        if (isSaved) {
-          const res = await fetch(`/api/alerts/${encodeURIComponent(id)}`, {
-            method: "DELETE",
-            credentials: "include",
-          });
-          if (!res.ok && res.status !== 404) {
-            const data = (await res.json()) as { error?: string };
-            throw new Error(data.error ?? "Failed to dismiss alert");
-          }
-          setSavedAlerts((current) => current.filter((alert) => alert.id !== id));
-          return;
+        if (!isSaved) return;
+        const res = await fetch(`/api/alerts/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok && res.status !== 404) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Failed to dismiss alert");
         }
-        setPrefs((current) => ({
-          ...current,
-          dismissedMockAlertIds: [...current.dismissedMockAlertIds, id],
-        }));
+        setSavedAlerts((current) => current.filter((alert) => alert.id !== id));
       },
       setEmailAlerts: (emailAlerts) => setPrefs((current) => ({ ...current, emailAlerts })),
       setDefaultChart: (defaultChart) => setPrefs((current) => ({ ...current, defaultChart })),
