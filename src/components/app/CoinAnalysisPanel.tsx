@@ -74,7 +74,16 @@ export function CoinAnalysisPanel({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setAnalysis(null);
+    setAnalysis((prev) => {
+      if (!prev) return null;
+      if (
+        prev.network === network &&
+        prev.address.toLowerCase() === address.toLowerCase()
+      ) {
+        return prev;
+      }
+      return null;
+    });
 
     const qs = new URLSearchParams({ network, address });
     if (whyHere) qs.set("why", whyHere);
@@ -143,12 +152,14 @@ export function CoinAnalysisPanel({
             Market structure
           </p>
           <h3 className="mt-1 font-sans text-[16px] font-semibold text-white">
-            {loading ? "Reading market + on-chain feeds…" : `${analysis?.symbol ?? "Token"} desk`}
+            {loading && !analysis
+              ? "Reading market + on-chain feeds…"
+              : `${analysis?.symbol ?? "Token"} desk`}
           </h3>
-          {!loading && analysis ? (
-            <p className="mt-1 font-mono text-[11px] text-zinc-500">
-              {analysis.headline}
-            </p>
+          {loading && analysis ? (
+            <p className="mt-1 font-mono text-[11px] text-zinc-500">Refreshing desk…</p>
+          ) : !loading && analysis ? (
+            <p className="mt-1 font-mono text-[11px] text-zinc-500">{analysis.headline}</p>
           ) : null}
         </div>
         {analysis ? (

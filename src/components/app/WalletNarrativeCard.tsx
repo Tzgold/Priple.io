@@ -209,6 +209,7 @@ export function WalletNarrativeCard({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
   const listRef = useRef<HTMLUListElement | null>(null);
   const activeSubjectKey = useRef<string | null>(subjectKey);
 
@@ -287,7 +288,7 @@ export function WalletNarrativeCard({
     return () => {
       cancelled = true;
     };
-  }, [subjectKey]);
+  }, [subjectKey, retryNonce]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -453,7 +454,23 @@ export function WalletNarrativeCard({
           </span>
         </Button>
       </form>
-      {error ? <p className="mt-2 font-mono text-[11px] text-rose-400/90">{error}</p> : null}
+      {error ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p className="font-mono text-[11px] text-rose-400/90">{error}</p>
+          {resolvedSubject ? (
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setRetryNonce((n) => n + 1);
+              }}
+              className="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 
