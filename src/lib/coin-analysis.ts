@@ -1,12 +1,18 @@
 import { estimateMarketCap } from "@/lib/candle-math";
 import { fetchCoinIntel, type CoinIntel } from "@/lib/coin-intel";
 import { fetchDexScreenerEnrichment } from "@/lib/dexscreener";
-import { fetchTokenDesk, type TokenDesk } from "@/lib/geckoterminal";
+import {
+  fetchPoolTrades,
+  fetchTokenDesk,
+  type TokenDesk,
+  type TokenTrade,
+} from "@/lib/geckoterminal";
 import { computeOpportunityScore, type OpportunityResult } from "@/lib/opportunity-score";
 import {
   fetchOnchainTokenInfo,
   type TokenSecurity,
 } from "@/lib/token-info";
+import type { PulseItem } from "@/lib/alchemy-pulse";
 
 export type SecurityCheckStatus = "pass" | "warn" | "fail" | "unknown";
 
@@ -22,6 +28,35 @@ export type CoinSecurityDesk = {
   summary: string;
   gtScoreLabel: string;
   checks: SecurityCheck[];
+};
+
+export type CoinFlowTrade = {
+  id: string;
+  side: "buy" | "sell" | "unknown";
+  usd: string;
+  time: string;
+  trader: string | null;
+  txHash: string | null;
+};
+
+export type CoinTrackedMove = {
+  walletLabel: string;
+  side: "buy" | "sell";
+  amount: string;
+  usd: string;
+  time: string;
+  date: string;
+};
+
+export type CoinFlowTape = {
+  poolName: string | null;
+  poolAddress: string | null;
+  summary: string;
+  buys: number;
+  sells: number;
+  volumeUsdLabel: string;
+  recent: CoinFlowTrade[];
+  tracked: CoinTrackedMove[];
 };
 
 export type CoinAnalysis = {
@@ -51,6 +86,8 @@ export type CoinAnalysis = {
   };
   /** Structured security checklist from on-chain / GT feeds. */
   security: CoinSecurityDesk;
+  /** Recent pool tape + tracked wallet moves on this coin. */
+  flow: CoinFlowTape;
   social: {
     websites: string[];
     twitter: string | null;
@@ -300,6 +337,136 @@ function money(value: number | null | undefined) {
   return `$${value.toPrecision(3)}`;
 }
 
+function shortTrader(address: string | null | undefined) {
+  if (!address) return null;
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function relativeTradeTime(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "—";
+  const mins = Math.max(0, Math.floor((Date.now() - ms) / 60_000));
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function mapTrackedMoves(moves: PulseItem[]): CoinTrackedMove[] {
+  return moves
+    .filter((item) => item.type === "buy" || item.type === "sell")
+    .slice(0, 12)
+    .map((item) => ({
+      walletLabel: item.walletLabel,
+      side: item.type === "sell" ? ("sell" as const) : ("buy" as const),
+      amount: item.amount,
+      usd: item.usd,
+      time: item.time,
+      date: item.date,
+    }));
+}
+
+function buildFlowTape(input: {
+  poolName: string | null;
+  poolAddress: string | null;
+  trades: TokenTrade[];
+  trackedMoves?: PulseItem[];
+  cexMajor?: boolean;
+}): CoinFlowTape {
+  const tracked = mapTrackedMoves(input.trackedMoves ?? []);
+
+  if (input.cexMajor) {
+    return {
+      poolName: null,
+      poolAddress: null,
+      summary: "CEX majors — no single DEX pool tape in this desk.",
+      buys: 0,
+      sells: 0,
+      volumeUsdLabel: "—",
+      recent: [],
+      tracked,
+    };
+  }
+
+  const recent: CoinFlowTrade[] = input.trades.slice(0, 16).map((trade) => ({
+    id: trade.id,
+    side: trade.kind,
+    usd: money(trade.amountUsd),
+    time: relativeTradeTime(trade.timestamp),
+    trader: shortTrader(trade.trader),
+    txHash: trade.txHash,
+  }));
+
+  let buys = 0;
+  let sells = 0;
+  let volume = 0;
+  let volumeKnown = false;
+  for (const trade of input.trades) {
+    if (trade.kind === "buy") buys += 1;
+    else if (trade.kind === "sell") sells += 1;
+    if (trade.amountUsd != null && Number.isFinite(trade.amountUsd)) {
+      volume += trade.amountUsd;
+      volumeKnown = true;
+    }
+  }
+
+  const parts: string[] = [];
+  if (recent.length === 0) {
+    parts.push("No recent pool prints above $1 in this window.");
+  } else {
+    parts.push(
+      `${recent.length} recent pool print${recent.length === 1 ? "" : "s"} · ${buys} buy / ${sells} sell`,
+    );
+  }
+  if (tracked.length > 0) {
+    parts.push(
+      `${tracked.length} tracked desk move${tracked.length === 1 ? "" : "s"} on this coin`,
+    );
+  } else {
+    parts.push("No tracked desk moves on this coin in the personal pulse window.");
+  }
+
+  return {
+    poolName: input.poolName,
+    poolAddress: input.poolAddress,
+    summary: parts.join(" · "),
+    buys,
+    sells,
+    volumeUsdLabel: volumeKnown ? money(volume) : "—",
+    recent,
+    tracked,
+  };
+}
+
+/** Attach personal tracked moves onto an existing analysis flow tape. */
+export function withTrackedFlowMoves(
+  analysis: CoinAnalysis,
+  moves: PulseItem[],
+): CoinAnalysis {
+  const tracked = mapTrackedMoves(moves);
+  const baseSummary = analysis.flow.summary
+    .replace(/\s*·\s*No tracked desk moves on this coin in the personal pulse window\./i, "")
+    .replace(/\s*·\s*\d+ tracked desk move[s]? on this coin/i, "")
+    .trim();
+
+  const trackedNote =
+    tracked.length > 0
+      ? `${tracked.length} tracked desk move${tracked.length === 1 ? "" : "s"} on this coin`
+      : "No tracked desk moves on this coin in the personal pulse window.";
+
+  return {
+    ...analysis,
+    flow: {
+      ...analysis.flow,
+      tracked,
+      summary: baseSummary ? `${baseSummary} · ${trackedNote}` : trackedNote,
+    },
+  };
+}
+
 function buildRisk(desk: TokenDesk) {
   const notes: string[] = [];
   let score = 0;
@@ -442,6 +609,12 @@ export async function buildCoinAnalysis(input: {
       },
       risk: { level: "unknown", notes: ["CEX majors — risk is market/volatility, not honeypot style."] },
       security: buildSecurityDesk(null, { cexMajor: true }),
+      flow: buildFlowTape({
+        poolName: null,
+        poolAddress: null,
+        trades: [],
+        cexMajor: true,
+      }),
       social: { websites: [], twitter: null, telegram: null, discord: null, description: null },
       holders: { countLabel: "—", top10Label: "—", next20Label: "—" },
       whyHere: input.whyHere ?? null,
@@ -487,14 +660,15 @@ export async function buildCoinAnalysis(input: {
         volume24hUsd: desk.volume24hUsd ?? enrich?.volume24hUsd ?? null,
         liquidityUsd: desk.liquidityUsd ?? enrich?.liquidityUsd ?? null,
         priceChange24h: desk.priceChange24h ?? enrich?.priceChange24h ?? null,
+        poolAddress: desk.poolAddress ?? enrich?.pairAddress ?? null,
         info: info || desk.info,
       }
     : {
         network: input.network,
         address: input.address,
-        name: enrich?.pairAddress ? "Token" : "Unknown",
-        symbol: "???",
-        imageUrl: null,
+        name: enrich?.name || (enrich?.pairAddress ? "Token" : "Unknown"),
+        symbol: (enrich?.symbol || "???").toUpperCase(),
+        imageUrl: enrich?.imageUrl ?? null,
         priceUsd: enrich?.priceUsd ?? null,
         marketCapUsd: enrich?.marketCapUsd ?? null,
         fdvUsd: enrich?.fdvUsd ?? null,
@@ -530,6 +704,23 @@ export async function buildCoinAnalysis(input: {
   const risk = buildRisk(merged);
   const security = buildSecurityDesk(merged.info?.security);
   const structure = buildStructure(merged, mcap.value);
+
+  let poolTrades: TokenTrade[] = [];
+  if (merged.poolAddress) {
+    try {
+      poolTrades = await fetchPoolTrades(merged.network, merged.poolAddress, 24);
+      if (poolTrades.length > 0 && !sources.includes("GeckoTerminal trades")) {
+        sources.push("GeckoTerminal trades");
+      }
+    } catch {
+      poolTrades = [];
+    }
+  }
+  const flow = buildFlowTape({
+    poolName: merged.poolName,
+    poolAddress: merged.poolAddress,
+    trades: poolTrades,
+  });
   const depth =
     merged.liquidityUsd != null && mcap.value != null && mcap.value > 0
       ? `${((merged.liquidityUsd / mcap.value) * 100).toFixed(1)}% liq / mcap`
@@ -617,6 +808,7 @@ export async function buildCoinAnalysis(input: {
     structure,
     risk,
     security,
+    flow,
     social: {
       websites: (info?.socials.websites ?? []).filter((url) => /^https?:\/\//i.test(url)),
       twitter: info?.socials.twitter ?? null,

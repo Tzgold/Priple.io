@@ -277,9 +277,10 @@ export async function fetchPoolTrades(
   limit = 40,
 ): Promise<TokenTrade[]> {
   const net = normalizeNetwork(network);
-  const json = await gtGet(
-    `/networks/${net}/pools/${encodeURIComponent(poolAddress)}/trades?trade_volume_in_usd_greater_than=1`,
-  );
+  const path =
+    `/networks/${net}/pools/${encodeURIComponent(poolAddress)}/trades` +
+    `?trade_volume_in_usd_greater_than=0`;
+  const json = await gtGet(path);
   const rows = (json.data as Json[] | undefined) ?? [];
 
   return rows.slice(0, limit).map((row, index) => {

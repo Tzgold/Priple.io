@@ -1,5 +1,5 @@
 import { buildPulseForWallets, type PulseItem } from "@/lib/alchemy-pulse";
-import { buildCoinAnalysis } from "@/lib/coin-analysis";
+import { buildCoinAnalysis, withTrackedFlowMoves } from "@/lib/coin-analysis";
 import { getWallet, listWallets, type WalletRow } from "@/lib/desk-db";
 import { buildFlowsFromPulse } from "@/lib/flows";
 import {
@@ -80,7 +80,7 @@ export async function loadCoinNarrativePacket(
   whyHere?: string | null,
   trackedWalletBuys?: number,
 ): Promise<CoinNarrativePacket | null> {
-  const analysis = await buildCoinAnalysis({
+  let analysis = await buildCoinAnalysis({
     network,
     address,
     whyHere,
@@ -101,8 +101,9 @@ export async function loadCoinNarrativePacket(
       })),
       "personal",
     );
-    trackedMoves = pulse.filter((item) => matchesCoin(network, address, analysis.symbol, item));
+    trackedMoves = pulse.filter((item) => matchesCoin(network, address, analysis!.symbol, item));
     clusters = buildFlowsFromPulse(pulse.filter((item) => item.source === "personal")).clusters;
+    analysis = withTrackedFlowMoves(analysis, trackedMoves);
   }
 
   return buildCoinPacketFromAnalysis({

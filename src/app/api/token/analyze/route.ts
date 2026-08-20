@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
-import { buildCoinAnalysis } from "@/lib/coin-analysis";
+import { buildPulseForWallets } from "@/lib/alchemy-pulse";
+import {
+  buildCoinAnalysis,
+  withTrackedFlowMoves,
+} from "@/lib/coin-analysis";
+import { listWallets } from "@/lib/desk-db";
+import { coinSubjectKey } from "@/lib/narrative-load";
 import { limitUserRoute, rateLimitJson } from "@/lib/rate-limit";
+import { resolvePulseBuy } from "@/lib/screener-lists";
 import { requireSession } from "@/lib/session";
 
 export async function GET(request: Request) {
@@ -26,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const analysis = await buildCoinAnalysis({
+    let analysis = await buildCoinAnalysis({
       network,
       address,
       whyHere,
@@ -38,6 +45,29 @@ export async function GET(request: Request) {
     if (!analysis) {
       return NextResponse.json({ error: "Could not build analysis" }, { status: 404 });
     }
+
+    const wallets = await listWallets(session.user.id);
+    if (wallets.length > 0) {
+      const pulse = await buildPulseForWallets(
+        wallets.map((wallet) => ({
+          label: wallet.label,
+          address: wallet.address,
+          chain: wallet.chain,
+        })),
+        "personal",
+      );
+      const subject = coinSubjectKey(network, address);
+      const trackedMoves = pulse.filter((item) => {
+        if (item.source !== "personal") return false;
+        const route = resolvePulseBuy(item);
+        if (route) {
+          return coinSubjectKey(route.network, route.address) === subject;
+        }
+        return item.asset.toUpperCase() === analysis!.symbol.toUpperCase();
+      });
+      analysis = withTrackedFlowMoves(analysis, trackedMoves);
+    }
+
     return NextResponse.json({ analysis });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Analysis failed";

@@ -101,6 +101,19 @@ export type CoinNarrativePacket = {
       date: string;
     }>;
   };
+  tape: {
+    poolName: string | null;
+    summary: string;
+    buys: number;
+    sells: number;
+    volumeUsd: string;
+    recent: Array<{
+      side: string;
+      usd: string;
+      time: string;
+      trader: string | null;
+    }>;
+  };
   structure: {
     liquidityNote: string;
     volumeNote: string;
@@ -392,7 +405,30 @@ export function buildCoinPacketFromAnalysis(input: {
     tracked: {
       whyHere: analysis.whyHere ? clip(analysis.whyHere, 400) : null,
       walletBuys: walletLabels.size,
-      moves,
+      moves:
+        analysis.flow.tracked.length > 0
+          ? analysis.flow.tracked.slice(0, 24).map((item) => ({
+              walletLabel: clip(item.walletLabel, 64),
+              side: item.side,
+              amount: clip(item.amount, 32),
+              usd: clip(item.usd, 32),
+              time: clip(item.time, 24),
+              date: clip(item.date, 24),
+            }))
+          : moves,
+    },
+    tape: {
+      poolName: analysis.flow.poolName ? clip(analysis.flow.poolName, 80) : null,
+      summary: clip(analysis.flow.summary, 320),
+      buys: analysis.flow.buys,
+      sells: analysis.flow.sells,
+      volumeUsd: clip(analysis.flow.volumeUsdLabel, 32),
+      recent: analysis.flow.recent.slice(0, 16).map((row) => ({
+        side: clip(row.side, 16),
+        usd: clip(row.usd, 32),
+        time: clip(row.time, 24),
+        trader: row.trader ? clip(row.trader, 32) : null,
+      })),
     },
     structure: {
       liquidityNote: clip(analysis.structure.liquidityNote, 400),

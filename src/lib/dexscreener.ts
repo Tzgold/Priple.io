@@ -56,6 +56,8 @@ export type DexScreenerEnrichment = {
   pairAddress: string | null;
   pairUrl: string | null;
   imageUrl: string | null;
+  symbol: string | null;
+  name: string | null;
   socials: DexScreenerSocials;
   pools: DexPoolOption[];
   source: "dexscreener";
@@ -184,6 +186,8 @@ export async function fetchDexScreenerEnrichment(
     pairAddress: best.pairAddress || null,
     pairUrl: best.url || null,
     imageUrl: best.info?.imageUrl || null,
+    symbol: best.baseToken?.symbol || null,
+    name: best.baseToken?.name || null,
     socials: parseSocials(best.info),
     pools,
     source: "dexscreener",
