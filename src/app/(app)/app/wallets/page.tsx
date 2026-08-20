@@ -108,6 +108,11 @@ function WalletsBoard() {
     router.push(`${url.pathname}?${url.searchParams.toString()}`);
   }
 
+  const walletNarrative = useMemo(
+    () => (dossier ? buildWalletNarrative(dossier, clusters) : null),
+    [dossier, clusters],
+  );
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -244,10 +249,17 @@ function WalletsBoard() {
                 ) : null}
               </div>
 
-              <WalletNarrativeCard
-                narrative={buildWalletNarrative(dossier, clusters)}
-                walletId={trackedWallets.some((wallet) => wallet.id === dossier.id) ? dossier.id : undefined}
-              />
+              {walletNarrative ? (
+                <WalletNarrativeCard
+                  key={`wallet:${dossier.id}`}
+                  narrative={walletNarrative}
+                  walletId={
+                    trackedWallets.some((wallet) => wallet.id === dossier.id)
+                      ? dossier.id
+                      : undefined
+                  }
+                />
+              ) : null}
 
               <div className="rounded-[20px] border border-white/[0.08] bg-black/30">
                 <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">

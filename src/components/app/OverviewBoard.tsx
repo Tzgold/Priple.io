@@ -284,6 +284,7 @@ export function OverviewBoard() {
 
       {overviewNarrative ? (
         <WalletNarrativeCard
+          key={overviewNarrative.walletId ? `wallet:${overviewNarrative.walletId}` : "wallet:pulse"}
           narrative={overviewNarrative.narrative}
           walletId={overviewNarrative.walletId}
           compact

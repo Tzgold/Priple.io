@@ -80,6 +80,7 @@ function ScreenerBoard() {
             trackWhy={whyParam}
           />
           <CoinAnalysisPanel
+            key={`${network}:${address.toLowerCase()}`}
             network={network}
             address={address}
             whyHere={whyHere}
