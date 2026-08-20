@@ -28,8 +28,8 @@ const COIN_SUGGESTIONS = [
   "Any news headlines?",
   "Run the security checklist",
   "Show recent pool tape",
+  "Map the holder concentration",
   "Which tracked wallets bought?",
-  "What's the liquidity risk?",
 ];
 
 function linkifyText(text: string) {
@@ -215,7 +215,7 @@ export function WalletNarrativeCard({
   const suggestions = resolvedSubject?.type === "coin" ? COIN_SUGGESTIONS : WALLET_SUGGESTIONS;
   const askHint =
     resolvedSubject?.type === "coin"
-      ? "Ask about security flags, pool tape, news links, tracked buys, holder concentration, or liquidity."
+      ? "Ask about security flags, holder concentration, pool tape, news links, tracked buys, or liquidity."
       : "Ask about buys, sells, window flow, holdings, or whether this feed is live.";
 
   // Seed local briefing from props only when the subject changes — not on every parent re-render.

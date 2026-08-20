@@ -21,7 +21,7 @@ import { OpportunityScoreCard } from "@/components/app/OpportunityScoreCard";
 import { WalletNarrativeCard } from "@/components/app/WalletNarrativeCard";
 import { cn } from "@/lib/cn";
 import { buildCoinNarrativeTemplate } from "@/lib/coin-narrative";
-import type { CoinAnalysis, SecurityCheckStatus } from "@/lib/coin-analysis";
+import type { CoinAnalysis, HolderBandTone, SecurityCheckStatus } from "@/lib/coin-analysis";
 
 function safeHttpUrl(value: string | null | undefined) {
   if (!value) return null;
@@ -359,6 +359,71 @@ export function CoinAnalysisPanel({
           <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                <Users className="h-3 w-3" /> Holder map
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] text-zinc-500">
+                  {analysis.holderMap.countLabel} holders
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase",
+                    analysis.holderMap.level === "high"
+                      ? "border-rose-500/30 text-rose-300"
+                      : analysis.holderMap.level === "medium"
+                        ? "border-amber-500/30 text-amber-200"
+                        : analysis.holderMap.level === "low"
+                          ? "border-teal-500/30 text-teal-300"
+                          : "border-white/10 text-zinc-500",
+                  )}
+                >
+                  Concentration · {analysis.holderMap.level}
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 font-mono text-[11px] leading-5 text-zinc-400">
+              {analysis.holderMap.summary}
+            </p>
+            <ul className="mt-3 space-y-2.5">
+              {analysis.holderMap.bands.map((band) => (
+                <li key={band.id} className="rounded-xl border border-white/[0.04] bg-black/25 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-[11px] text-zinc-200">{band.label}</p>
+                    <p
+                      className={cn(
+                        "font-mono text-[12px]",
+                        band.tone === "risk"
+                          ? "text-rose-300"
+                          : band.tone === "watch"
+                            ? "text-amber-200"
+                            : band.tone === "ok"
+                              ? "text-teal-300"
+                              : "text-zinc-500",
+                      )}
+                    >
+                      {band.pctLabel}
+                    </p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-[width]",
+                        bandToneBar(band.tone),
+                      )}
+                      style={{
+                        width: `${Math.max(0, Math.min(100, band.pct ?? 0))}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-1.5 font-mono text-[10px] leading-4 text-zinc-500">{band.detail}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-600">
                 <Waves className="h-3 w-3" /> Flow / tape
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -578,6 +643,13 @@ function SecurityStatusIcon({ status }: { status: SecurityCheckStatus }) {
     return <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />;
   }
   return <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" />;
+}
+
+function bandToneBar(tone: HolderBandTone) {
+  if (tone === "risk") return "bg-rose-400/80";
+  if (tone === "watch") return "bg-amber-300/80";
+  if (tone === "ok") return "bg-teal-400/80";
+  return "bg-zinc-600";
 }
 
 function StructureCard({
