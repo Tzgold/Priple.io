@@ -8,7 +8,7 @@ import { CommandSearch } from "@/components/app/CommandSearch";
 import { CopyButton } from "@/components/app/CopyButton";
 import { WatchlistPanel } from "@/components/app/WatchlistPanel";
 import { WalletModalProvider } from "@/components/app/WalletModalProvider";
-import { DeskProvider } from "@/lib/app-store";
+import { DeskProvider, useDesk } from "@/lib/app-store";
 import { signOut } from "@/lib/auth-client";
 
 type AppUser = {
@@ -19,6 +19,8 @@ type AppUser = {
 
 export function DashboardTopBar({ user }: { user: AppUser }) {
   const router = useRouter();
+  const { savedAlerts } = useDesk();
+  const unread = savedAlerts.length;
   const initials =
     user.name
       ?.split(/\s+/)
@@ -58,7 +60,11 @@ export function DashboardTopBar({ user }: { user: AppUser }) {
           title="Alerts"
         >
           <Bell className="h-4 w-4" strokeWidth={1.6} />
-          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500" />
+          {unread > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 font-mono text-[9px] font-semibold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          ) : null}
         </Link>
         <button
           type="button"
