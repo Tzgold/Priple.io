@@ -47,10 +47,36 @@ export function aggregateCandles(
   return [...buckets.values()].sort((a, b) => a.time - b.time);
 }
 
-/** Convert price candles to market-cap candles when supply is known. */
+/** Drop non-finite / non-positive OHLC so Lightweight Charts never paints garbage. */
+export function sanitizeCandles(candles: Candle[]): Candle[] {
+  const out: Candle[] = [];
+  for (const c of candles) {
+    if (!Number.isFinite(c.time)) continue;
+    const open = Number(c.open);
+    const high = Number(c.high);
+    const low = Number(c.low);
+    const close = Number(c.close);
+    const volume = Number(c.volume);
+    if (![open, high, low, close].every((n) => Number.isFinite(n) && n > 0)) continue;
+    const hi = Math.max(open, high, low, close);
+    const lo = Math.min(open, high, low, close);
+    if (!(hi >= lo) || lo <= 0) continue;
+    out.push({
+      time: Math.floor(c.time),
+      open,
+      high: hi,
+      low: lo,
+      close,
+      volume: Number.isFinite(volume) && volume >= 0 ? volume : 0,
+    });
+  }
+  return out;
+}
+
+/** Convert price candles to market-cap candles when supply is known and sane. */
 export function toMarketCapCandles(candles: Candle[], supply: number | null): Candle[] {
-  if (!supply || supply <= 0) return candles;
-  return candles.map((c) => ({
+  if (!supply || !Number.isFinite(supply) || supply <= 0) return candles;
+  const scaled = candles.map((c) => ({
     time: c.time,
     open: c.open * supply,
     high: c.high * supply,
@@ -58,6 +84,20 @@ export function toMarketCapCandles(candles: Candle[], supply: number | null): Ca
     close: c.close * supply,
     volume: c.volume,
   }));
+  // Refuse mcap scale if it produces nonsense (negative / non-finite already filtered).
+  const cleaned = sanitizeCandles(scaled);
+  return cleaned.length > 0 ? cleaned : candles;
+}
+
+/** Prefer price scale when supply estimate would invent a broken mcap axis. */
+export function canScaleCandlesToMcap(supply: number | null, priceUsd: number | null): boolean {
+  if (supply == null || !Number.isFinite(supply) || supply <= 0) return false;
+  if (priceUsd != null && priceUsd > 0) {
+    const est = supply * priceUsd;
+    // Guard absurd supply (raw wei-like) or tiny dust.
+    if (!Number.isFinite(est) || est <= 0 || est > 5e15) return false;
+  }
+  return true;
 }
 
 export function estimateMarketCap(input: {

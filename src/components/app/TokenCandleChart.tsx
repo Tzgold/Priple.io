@@ -15,6 +15,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import type { Candle } from "@/lib/geckoterminal";
+import { sanitizeCandles } from "@/lib/candle-math";
 import type { WalletChartMark } from "@/lib/wallet-dossier";
 import { cn } from "@/lib/cn";
 
@@ -22,19 +23,11 @@ import { cn } from "@/lib/cn";
 export function normalizeCandles(candles: Candle[]): Candle[] {
   const byTime = new Map<number, Candle>();
 
-  for (const candle of candles) {
-    if (!Number.isFinite(candle.time)) continue;
+  for (const candle of sanitizeCandles(candles)) {
     const time = Math.floor(candle.time);
     const prev = byTime.get(time);
     if (!prev) {
-      byTime.set(time, {
-        time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        volume: candle.volume,
-      });
+      byTime.set(time, { ...candle, time });
       continue;
     }
     byTime.set(time, {
@@ -434,17 +427,24 @@ export function TokenCandleChart({
                     alt=""
                     className="h-full w-full object-cover"
                     referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span
-                    className="flex h-full w-full items-center justify-center font-mono text-[9px] font-semibold text-white"
-                    style={{
-                      background: `linear-gradient(135deg, hsl(${hue} 55% 38%), hsl(${hue} 45% 22%))`,
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const sibling = e.currentTarget.nextElementSibling;
+                      if (sibling instanceof HTMLElement) sibling.style.display = "flex";
                     }}
-                  >
-                    {initials || "W"}
-                  </span>
-                )}
+                  />
+                ) : null}
+                <span
+                  className={cn(
+                    "h-full w-full items-center justify-center font-mono text-[9px] font-semibold text-white",
+                    avatar ? "hidden" : "flex",
+                  )}
+                  style={{
+                    background: `linear-gradient(135deg, hsl(${hue} 55% 38%), hsl(${hue} 45% 22%))`,
+                  }}
+                >
+                  {initials || "W"}
+                </span>
               </div>
               {spot.overflow ? (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900 px-1 font-mono text-[8px] font-semibold text-white ring-1 ring-white/20">

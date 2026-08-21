@@ -9,7 +9,8 @@ import { TradingViewAdvancedChart } from "@/components/app/TradingViewAdvancedCh
 import { TokenMark } from "@/components/app/TokenMark";
 import { cn } from "@/lib/cn";
 import { useDesk } from "@/lib/app-store";
-import { aggregateCandles, estimateMarketCap, toMarketCapCandles } from "@/lib/candle-math";
+import { aggregateCandles, canScaleCandlesToMcap, estimateMarketCap, sanitizeCandles, toMarketCapCandles } from "@/lib/candle-math";
+import { dexScreenerTokenImageUrl } from "@/lib/token-logo";
 import {
   dexScreenerPairPageUrl,
   fetchDexScreenerEnrichment,
@@ -157,10 +158,6 @@ export function TokenDeskView({
     [token?.marketCapUsd, token?.fdvUsd, token?.priceUsd, token?.supply],
   );
 
-  const canMcapChart =
-    (token?.supply != null && token.supply > 0) ||
-    (mcap.value != null && token?.priceUsd != null && token.priceUsd > 0);
-
   const chartSupply = useMemo(() => {
     if (token?.supply != null && token.supply > 0) return token.supply;
     if (mcap.value != null && token?.priceUsd != null && token.priceUsd > 0) {
@@ -169,17 +166,29 @@ export function TokenDeskView({
     return null;
   }, [token?.supply, token?.priceUsd, mcap.value]);
 
+  const canMcapChart = canScaleCandlesToMcap(chartSupply, token?.priceUsd ?? null);
+
   const candles = useMemo(() => {
+    let series: Candle[];
     if (network === "coingecko") {
-      const series = aggregateCandles(cgCandles, interval, 300);
-      return chartScale === "mcap" ? toMarketCapCandles(series, chartSupply) : series;
+      series = aggregateCandles(cgCandles, interval, 300);
+    } else {
+      const shortTf = interval === "1m" || interval === "15m";
+      const base = shortTf ? base1m : base1h.length > 0 ? base1h : base1m;
+      const sourceSeconds = shortTf || base1h.length === 0 ? 60 : 3600;
+      series = aggregateCandles(base, interval, sourceSeconds);
     }
-    const shortTf = interval === "1m" || interval === "15m";
-    const base = shortTf ? base1m : base1h.length > 0 ? base1h : base1m;
-    const sourceSeconds = shortTf || base1h.length === 0 ? 60 : 3600;
-    const series = aggregateCandles(base, interval, sourceSeconds);
-    return chartScale === "mcap" ? toMarketCapCandles(series, chartSupply) : series;
-  }, [network, cgCandles, base1m, base1h, interval, chartScale, chartSupply]);
+    series = sanitizeCandles(series);
+    if (chartScale === "mcap" && canScaleCandlesToMcap(chartSupply, token?.priceUsd ?? null)) {
+      return toMarketCapCandles(series, chartSupply);
+    }
+    return series;
+  }, [network, cgCandles, base1m, base1h, interval, chartScale, chartSupply, token?.priceUsd]);
+
+  const hasUsableCandles = candles.length >= 2;
+  const deskImageUrl =
+    token?.imageUrl ||
+    (network !== "coingecko" ? dexScreenerTokenImageUrl(network, address) : null);
 
   const trackingActive = Boolean(trackWallet);
 
@@ -195,14 +204,33 @@ export function TokenDeskView({
 
   useEffect(() => {
     if (trackingActive) {
-      setChartMode("lightweight");
+      // Prefer Priple for wallet markers; if candles are unusable, fall back to Dex embed.
+      if (!loadingCandles && !hasUsableCandles && canDexScreener && dexChartAddress) {
+        setChartMode("dexscreener");
+      } else {
+        setChartMode("lightweight");
+      }
       return;
     }
     if (tvSymbol) setChartMode("tradingview");
     else if (defaultChart === "priple") setChartMode("lightweight");
     else if (canDexScreener) setChartMode("dexscreener");
     else setChartMode("lightweight");
-  }, [tvSymbol, canDexScreener, network, address, trackingActive, defaultChart]);
+  }, [
+    tvSymbol,
+    canDexScreener,
+    network,
+    address,
+    trackingActive,
+    defaultChart,
+    hasUsableCandles,
+    loadingCandles,
+    dexChartAddress,
+  ]);
+
+  useEffect(() => {
+    if (chartScale === "mcap" && !canMcapChart) setChartScale("price");
+  }, [chartScale, canMcapChart]);
 
   // Soft refresh of Dex stats while the desk is open (keeps header live without hammering GT).
   useEffect(() => {
@@ -696,7 +724,7 @@ export function TokenDeskView({
       <section className="rounded-[20px] border border-white/[0.08] bg-[#0a0a0c] p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <TokenMark symbol={token?.symbol || "ETH"} imageUrl={token?.imageUrl} size={48} />
+            <TokenMark symbol={token?.symbol || "ETH"} imageUrl={deskImageUrl} size={48} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="truncate font-sans text-xl font-semibold tracking-tight text-white sm:text-2xl">
@@ -841,7 +869,7 @@ export function TokenDeskView({
               <p className="mt-1 font-mono text-[11px] leading-5 text-teal-100/80">
                 {trackWhy ||
                   "Profile avatars mark buys (teal) and sells (rose) on the Priple chart."}{" "}
-                Chart locked to Priple while tracking so markers can render.
+                Chart uses Priple candles for wallet markers when available; falls back to Dex if candles are missing or invalid.
               </p>
               {marksNote ? (
                 <p className="mt-2 font-mono text-[11px] text-zinc-400">{marksNote}</p>
@@ -1047,14 +1075,29 @@ export function TokenDeskView({
             pairOrTokenAddress={dexChartAddress}
             heightClass={compact ? "h-[460px] w-full sm:h-[560px]" : "h-[480px] w-full sm:h-[580px]"}
           />
-        ) : loadingCandles && candles.length === 0 ? (
+        ) : loadingCandles && !hasUsableCandles ? (
           <p className="px-4 py-20 text-center font-mono text-[12px] text-zinc-600">
             Loading {interval} candles…
           </p>
-        ) : candles.length === 0 ? (
-          <p className="px-4 py-20 text-center font-mono text-[12px] text-zinc-600">
-            No candles yet for this token / interval.
-          </p>
+        ) : !hasUsableCandles ? (
+          <div className="space-y-3 px-4 py-16 text-center">
+            <p className="font-mono text-[12px] text-zinc-500">
+              No clean candles for this token / interval yet.
+            </p>
+            {canDexScreener && dexChartAddress ? (
+              <button
+                type="button"
+                onClick={() => setChartMode("dexscreener")}
+                className="rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 font-mono text-[11px] text-zinc-200 hover:bg-white/[0.1]"
+              >
+                Open DexScreener chart
+              </button>
+            ) : (
+              <p className="font-mono text-[11px] text-zinc-600">
+                If Dex / TradingView also miss this pair, wait for a pool to index.
+              </p>
+            )}
+          </div>
         ) : (
           <TokenCandleChart
             key={`${network}-${address}-${interval}-${candles[0]?.time ?? 0}-${candles.length}-${walletMarks.length}`}
