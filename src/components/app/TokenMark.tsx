@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CryptoIcon, type CryptoIconName } from "@/components/marketing/CryptoIcons";
 import { cn } from "@/lib/cn";
 
@@ -44,6 +45,29 @@ export function resolveTokenImage(symbol?: string | null, imageUrl?: string | nu
   return SYMBOL_IMAGE_URL[symbol.toUpperCase()] ?? null;
 }
 
+function InitialsMark({
+  symbol,
+  size,
+  className,
+}: {
+  symbol: string;
+  size: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#161616] font-mono text-[10px] font-semibold text-zinc-300",
+        className,
+      )}
+      style={{ width: size, height: size }}
+      title={symbol}
+    >
+      {symbol.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
 export function TokenMark({
   symbol,
   imageUrl,
@@ -55,7 +79,8 @@ export function TokenMark({
   size?: number;
   className?: string;
 }) {
-  const src = resolveTokenImage(symbol, imageUrl);
+  const [broken, setBroken] = useState(false);
+  const src = broken ? null : resolveTokenImage(symbol, imageUrl);
   const iconName = symbolMap[symbol.toUpperCase()];
 
   if (src) {
@@ -70,6 +95,7 @@ export function TokenMark({
         style={{ width: size, height: size }}
         loading="lazy"
         referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
       />
     );
   }
@@ -78,16 +104,5 @@ export function TokenMark({
     return <CryptoIcon name={iconName} size={size} className={cn("shrink-0", className)} />;
   }
 
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#161616] font-mono text-[10px] font-semibold text-zinc-300",
-        className,
-      )}
-      style={{ width: size, height: size }}
-      title={symbol}
-    >
-      {symbol.slice(0, 2).toUpperCase()}
-    </span>
-  );
+  return <InitialsMark symbol={symbol} size={size} className={className} />;
 }

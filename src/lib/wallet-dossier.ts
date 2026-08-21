@@ -1,4 +1,5 @@
 import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG } from "@/lib/token-routes";
+import { pickResolvedLogo, resolveTokenLogoUrls } from "@/lib/token-logo";
 import { walletAvatarUrl } from "@/lib/wallet-avatar";
 import {
   alchemyRpcUrlFor,
@@ -25,6 +26,8 @@ export type WalletActivityItem = {
   tokenAddress: string | null;
   network: string;
   screenerHref: string | null;
+  /** Resolved via DexScreener / Jupiter when available. */
+  imageUrl?: string | null;
 };
 
 export type WalletHolding = {
@@ -35,6 +38,7 @@ export type WalletHolding = {
   tokenAddress: string | null;
   network: string;
   screenerHref: string | null;
+  imageUrl?: string | null;
   native?: boolean;
 };
 
@@ -209,6 +213,7 @@ function transferToActivity(
     tokenAddress,
     network,
     screenerHref: screenerHrefForAsset({ asset, tokenAddress, network }),
+    imageUrl: null,
   };
 }
 
@@ -235,6 +240,7 @@ async function fetchEvmHoldings(chain: DeskChain, address: string): Promise<Wall
           tokenAddress: wrapped,
           network,
         }),
+        imageUrl: null,
         native: true,
       });
     }
@@ -269,6 +275,7 @@ async function fetchEvmHoldings(chain: DeskChain, address: string): Promise<Wall
         tokenAddress,
         network,
         screenerHref: screenerHrefForAsset({ asset: symbol, tokenAddress, network }),
+        imageUrl: null,
       } satisfies WalletHolding;
     }),
   );
@@ -375,6 +382,7 @@ async function fetchSolanaActivity(address: string): Promise<WalletActivityItem[
           tokenAddress: mint,
           network,
         }),
+        imageUrl: null,
       });
     }
 
@@ -404,6 +412,7 @@ async function fetchSolanaActivity(address: string): Promise<WalletActivityItem[
             tokenAddress: wsol,
             network,
           }),
+          imageUrl: null,
         });
       }
     }
@@ -429,6 +438,7 @@ async function fetchSolanaHoldings(address: string): Promise<WalletHolding[]> {
       tokenAddress: wsol,
       network,
       screenerHref: screenerHrefForAsset({ asset: "SOL", tokenAddress: wsol, network }),
+      imageUrl: null,
       native: true,
     });
   }
@@ -470,10 +480,39 @@ async function fetchSolanaHoldings(address: string): Promise<WalletHolding[]> {
         tokenAddress: mint,
         network,
       }),
+      imageUrl: null,
     });
   }
 
   return holdings;
+}
+
+async function enrichDossierLogos(dossier: WalletDossier): Promise<WalletDossier> {
+  const keys = [
+    ...dossier.activity.map((row) => ({
+      network: row.network,
+      address: row.tokenAddress || "",
+    })),
+    ...dossier.holdings.map((row) => ({
+      network: row.network,
+      address: row.tokenAddress || "",
+    })),
+  ].filter((k) => k.address.length >= 8);
+
+  if (keys.length === 0) return dossier;
+
+  const logos = await resolveTokenLogoUrls(keys);
+  return {
+    ...dossier,
+    activity: dossier.activity.map((row) => ({
+      ...row,
+      imageUrl: pickResolvedLogo(logos, row.network, row.tokenAddress) || row.imageUrl,
+    })),
+    holdings: dossier.holdings.map((row) => ({
+      ...row,
+      imageUrl: pickResolvedLogo(logos, row.network, row.tokenAddress) || row.imageUrl,
+    })),
+  };
 }
 
 export async function buildLiveWalletDossier(input: {
@@ -499,7 +538,7 @@ export async function buildLiveWalletDossier(input: {
     });
     unique.sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0));
 
-    return {
+    return enrichDossierLogos({
       id: input.id,
       label: input.label,
       address: input.address,
@@ -511,7 +550,7 @@ export async function buildLiveWalletDossier(input: {
       buysCount: unique.filter((a) => a.side === "buy").length,
       sellsCount: unique.filter((a) => a.side === "sell").length,
       note: null,
-    };
+    });
   }
 
   const network = deskChainToGtNetwork(chain);
@@ -536,7 +575,7 @@ export async function buildLiveWalletDossier(input: {
 
   unique.sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0));
 
-  return {
+  return enrichDossierLogos({
     id: input.id,
     label: input.label,
     address: input.address,
@@ -548,7 +587,7 @@ export async function buildLiveWalletDossier(input: {
     buysCount: unique.filter((a) => a.side === "buy").length,
     sellsCount: unique.filter((a) => a.side === "sell").length,
     note: null,
-  };
+  });
 }
 
 export function buildDemoWalletDossier(input: {
@@ -592,6 +631,7 @@ export function buildDemoWalletDossier(input: {
       tokenAddress: null,
       network,
       screenerHref: screenerHrefForAsset({ asset: move.asset, network }),
+      imageUrl: null,
     };
   });
 
@@ -606,6 +646,7 @@ export function buildDemoWalletDossier(input: {
         tokenAddress: null,
         network: item.network,
         screenerHref: item.screenerHref,
+        imageUrl: null,
       });
     }
   }

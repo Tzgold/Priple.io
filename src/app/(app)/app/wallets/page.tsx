@@ -284,7 +284,7 @@ function WalletsBoard() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <TokenMark symbol={row.asset} size={22} />
+                                <TokenMark symbol={row.asset} imageUrl={row.imageUrl} size={22} />
                                 <span className="font-medium text-white">{row.asset}</span>
                               </div>
                             </td>
@@ -347,7 +347,7 @@ function WalletsBoard() {
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <TokenMark symbol={row.symbol} size={22} />
+                                <TokenMark symbol={row.symbol} imageUrl={row.imageUrl} size={22} />
                                 <div>
                                   <p className="font-medium text-white">{row.symbol}</p>
                                   <p className="font-mono text-[11px] text-zinc-500">{row.name}</p>
