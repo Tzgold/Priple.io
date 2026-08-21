@@ -169,9 +169,10 @@ export function DeskProvider({ children }: { children: React.ReactNode }) {
   const personalMode = savedWallets.length >= PERSONAL_PULSE_THRESHOLD;
 
   const wallets = useMemo(() => {
-    if (personalMode) return trackedWallets;
-    return sortWallets([...savedWallets, ...mockWallets]);
-  }, [personalMode, trackedWallets, savedWallets, prefs.sort]);
+    // Once the user tracks anything real, never mix in mock market desks.
+    if (savedWallets.length > 0) return trackedWallets;
+    return marketWallets;
+  }, [trackedWallets, marketWallets, savedWallets.length]);
 
   const alerts = savedAlerts;
 

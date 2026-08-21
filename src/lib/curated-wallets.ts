@@ -43,4 +43,5 @@ export const CURATED_SMART_MONEY: CuratedWallet[] = [
   },
 ];
 
-export const PERSONAL_PULSE_THRESHOLD = 3;
+/** Flip Overview / pulse to personal desks as soon as the user tracks one wallet. */
+export const PERSONAL_PULSE_THRESHOLD = 1;

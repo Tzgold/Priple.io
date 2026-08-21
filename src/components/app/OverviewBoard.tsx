@@ -179,7 +179,7 @@ export function OverviewBoard() {
                   : "No live transfers in this window for wallets you track."
                 : live
                   ? "Curated desks until you own the board."
-                  : `Demo tape until feeds return — track ${remaining || pulseThreshold} wallet${remaining === 1 ? "" : "s"} to flip this to your radar.`}
+                  : `Track a wallet to replace this demo tape with your own radar.`}
             </p>
           </div>
 
@@ -191,7 +191,13 @@ export function OverviewBoard() {
                   live ? "bg-teal-400" : "bg-zinc-500",
                 )}
               />
-              {loadingPulse ? "Syncing…" : live ? "Live chain feed" : "Demo pulse"}
+              {loadingPulse
+                ? "Syncing…"
+                : live
+                  ? "Live chain feed"
+                  : mode === "personal"
+                    ? "Quiet window"
+                    : "Demo pulse"}
             </div>
             <Button size="sm" onClick={openAddWallet}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />

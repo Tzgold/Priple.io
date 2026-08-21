@@ -1,5 +1,5 @@
 import { MAJOR_TOKEN_ROUTES, SYMBOL_TO_CG } from "@/lib/token-routes";
-import { pickResolvedLogo, resolveTokenLogoUrls } from "@/lib/token-logo";
+import { pickResolvedMeta, resolveTokenVisualMeta } from "@/lib/token-logo";
 import { walletAvatarUrl } from "@/lib/wallet-avatar";
 import {
   alchemyRpcUrlFor,
@@ -501,17 +501,27 @@ async function enrichDossierLogos(dossier: WalletDossier): Promise<WalletDossier
 
   if (keys.length === 0) return dossier;
 
-  const logos = await resolveTokenLogoUrls(keys);
+  const metas = await resolveTokenVisualMeta(keys);
   return {
     ...dossier,
-    activity: dossier.activity.map((row) => ({
-      ...row,
-      imageUrl: pickResolvedLogo(logos, row.network, row.tokenAddress) || row.imageUrl,
-    })),
-    holdings: dossier.holdings.map((row) => ({
-      ...row,
-      imageUrl: pickResolvedLogo(logos, row.network, row.tokenAddress) || row.imageUrl,
-    })),
+    activity: dossier.activity.map((row) => {
+      const meta = pickResolvedMeta(metas, row.network, row.tokenAddress);
+      const symbol = meta?.symbol || row.asset;
+      return {
+        ...row,
+        asset: symbol,
+        imageUrl: meta?.imageUrl || row.imageUrl || null,
+      };
+    }),
+    holdings: dossier.holdings.map((row) => {
+      const meta = pickResolvedMeta(metas, row.network, row.tokenAddress);
+      return {
+        ...row,
+        symbol: meta?.symbol || row.symbol,
+        name: meta?.name || row.name,
+        imageUrl: meta?.imageUrl || row.imageUrl || null,
+      };
+    }),
   };
 }
 

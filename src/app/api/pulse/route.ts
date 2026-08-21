@@ -103,20 +103,24 @@ export async function GET(request: Request) {
       "market",
     );
 
-    const items = marketItems.length > 0 ? marketItems : demoPulse();
+    const items = marketItems.length > 0 ? marketItems : tracked.length > 0 ? [] : demoPulse();
     return NextResponse.json({
       mode,
       personalReady,
       trackedCount: saved.length,
       threshold: PERSONAL_PULSE_THRESHOLD,
       live: marketItems.length > 0,
+      alertsCreated,
       items,
-      curated: CURATED_SMART_MONEY.map((wallet) => ({
-        id: wallet.id,
-        label: wallet.label,
-        address: wallet.address,
-        blurb: wallet.blurb,
-      })),
+      curated:
+        tracked.length > 0
+          ? []
+          : CURATED_SMART_MONEY.map((wallet) => ({
+              id: wallet.id,
+              label: wallet.label,
+              address: wallet.address,
+              blurb: wallet.blurb,
+            })),
     });
   } catch {
     return NextResponse.json({
@@ -125,7 +129,7 @@ export async function GET(request: Request) {
       trackedCount: saved.length,
       threshold: PERSONAL_PULSE_THRESHOLD,
       live: false,
-      items: mode === "personal" ? [] : demoPulse(),
+      items: mode === "personal" || tracked.length > 0 ? [] : demoPulse(),
     });
   }
 }

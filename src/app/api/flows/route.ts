@@ -73,17 +73,23 @@ export async function GET(request: Request) {
     }
 
     if (items.length === 0) {
-      const market = await buildPulseForWallets(
-        CURATED_SMART_MONEY.map((w) => ({
-          label: w.label,
-          address: w.address,
-          chain: w.chain,
-        })),
-        "market",
-      );
-      items = market.length > 0 ? market : demoPulse();
-      mode = market.length > 0 ? "market" : "market";
-      live = market.length > 0;
+      if (tracked.length > 0) {
+        // Prefer an empty personal radar over demo tape once desks exist.
+        mode = "personal";
+        live = false;
+      } else {
+        const market = await buildPulseForWallets(
+          CURATED_SMART_MONEY.map((w) => ({
+            label: w.label,
+            address: w.address,
+            chain: w.chain,
+          })),
+          "market",
+        );
+        items = market.length > 0 ? market : demoPulse();
+        mode = "market";
+        live = market.length > 0;
+      }
     }
 
     const snapshot = filterFlows(buildFlowsFromPulse(items), {
@@ -99,13 +105,14 @@ export async function GET(request: Request) {
       ...snapshot,
     });
   } catch {
-    const snapshot = filterFlows(buildFlowsFromPulse(demoPulse()), {
+    const fallbackItems = tracked.length > 0 ? [] : demoPulse();
+    const snapshot = filterFlows(buildFlowsFromPulse(fallbackItems), {
       symbol,
       network,
       address,
     });
     return NextResponse.json({
-      mode: "market",
+      mode: tracked.length > 0 ? "personal" : "market",
       live: false,
       trackedCount: saved.length,
       ...snapshot,
