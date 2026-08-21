@@ -53,7 +53,11 @@ async function ensureAuthVerificationTable() {
       CREATE INDEX IF NOT EXISTS verification_identifier_idx
       ON verification (identifier)
     `);
-    await lockPublicTable("verification");
+    // Skip lockPublicTable on boot — concurrent ALTER/REVOKE under pool pressure
+    // caused "tuple concurrently updated" and burned session slots.
+    if (process.env.AUTH_LOCK_VERIFICATION_TABLE === "1") {
+      await lockPublicTable("verification");
+    }
   } catch (error) {
     console.error(
       "[auth] verification table ensure failed:",

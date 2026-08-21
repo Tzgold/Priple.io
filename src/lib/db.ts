@@ -9,6 +9,39 @@ function isProduction() {
 }
 
 /**
+ * Serverless + Supabase session pooler (port 5432) exhausts quickly
+ * (EMAXCONNSESSION / pool_size: 15). Prefer transaction pooler (6543).
+ */
+export function normalizeDatabaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const isSupabasePooler =
+    host.includes("pooler.supabase.com") || host.includes("pooler.supabase.co");
+
+  if (isSupabasePooler) {
+    // Session mode → transaction mode for serverless.
+    if (!url.port || url.port === "5432") {
+      url.port = "6543";
+    }
+    if (!url.searchParams.has("pgbouncer")) {
+      url.searchParams.set("pgbouncer", "true");
+    }
+    if (!url.searchParams.has("connection_limit")) {
+      // Hint for some drivers; pg Pool.max is the real cap.
+      url.searchParams.set("connection_limit", "1");
+    }
+  }
+
+  return url.toString();
+}
+
+/**
  * SSL for managed Postgres.
  * Supabase pooler commonly triggers Node "self-signed certificate in certificate chain"
  * on Windows/local (and sometimes serverless). Default: do not reject for Supabase;
@@ -36,18 +69,22 @@ function sslConfig(connectionString: string): PoolConfig["ssl"] {
 }
 
 export function getPgPool(): Pool {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) {
     throw new Error("DATABASE_URL is required for desk persistence");
   }
 
   if (!globalForDb.priplePgPool) {
+    const url = normalizeDatabaseUrl(raw);
+    // One client per serverless isolate — many cold starts × max:5 blew Supabase session pool.
+    const max = Number(process.env.DATABASE_POOL_MAX || (isProduction() ? 1 : 5));
     globalForDb.priplePgPool = new Pool({
       connectionString: url,
       ssl: sslConfig(url),
-      max: isProduction() ? 5 : 10,
-      idleTimeoutMillis: 20_000,
-      connectionTimeoutMillis: 10_000,
+      max: Number.isFinite(max) && max > 0 ? max : 1,
+      idleTimeoutMillis: isProduction() ? 5_000 : 20_000,
+      connectionTimeoutMillis: 8_000,
+      allowExitOnIdle: true,
     });
   }
 
